@@ -1,0 +1,66 @@
+For use with https://mermaid.live/
+
+TODO:
+- Make chart loops actually loop.
+  - E.g. Improve starred email loop. Completion requirement: ZERO STARRED MAILS
+- Add "sync monoqueue" step at beginning of MONOQUEUE subgraph.
+- Generate the SVG, commit it to this repository, and link it from README.md.
+
+
+  %%{ init: { 'flowchart': { 'curve': 'linear' } } }%%
+    flowchart TD
+        subgraph Handle-Email["EMAIL"]
+            For-Each-Mail["For each message in inbox:"]
+            Star-Archive["STAR+ARCHIVE"]
+            External-Action["OPEN the URL, BOOKMARK it, CLOSE tab, ARCHIVE mail"]
+            Followup-Later["use SNOOZE"]
+            Inbox-Zero["Goal: INBOX ZERO"]
+
+            For-Each-Mail -- "requires email reply?" --> Star-Archive
+            For-Each-Mail -- "external (GitHub/Discourse/etc.) action needed?" --> External-Action
+            For-Each-Mail -- "followup later?" --> Followup-Later
+            Star-Archive --> Inbox-Zero
+            External-Action --> Inbox-Zero
+            Followup-Later --> Inbox-Zero
+
+            For-Each-Starred["For each STARRED message:"]
+            Reply-Starred["Reply to STARRED message"]
+
+            Inbox-Zero --> For-Each-Starred
+            For-Each-Starred --> Reply-Starred
+        end
+
+        Handle-Email -- "Support day?" --> Monoqueue
+
+        subgraph Monoqueue["MONOQUEUE"]
+            For-Each-Item["For each queue item:"]
+            Open-Next["OPEN the top item in browser"]
+            Evaluate["EVALUATE needed action"]
+            Time-Box["TIME-BOX it"]
+            Do-It["JUST DO IT"]
+            Reply["REPLY with progress/resolution"]
+            Unbookmark["UNBOOKMARK it"]
+            Defer["DEFER it"]
+            Continue["CONTINUE to next action item"]
+            Push-Update["Push update to my publicly viewable support queue"]
+
+            For-Each-Item --> Open-Next
+            Open-Next --> Evaluate
+            Evaluate -- "If >5 minutes" --> Time-Box
+            Evaluate -- "If <5 minutes" --> Do-It
+            Time-Box --> Reply
+            Do-It --> Reply
+            Reply -- "Complete" --> Unbookmark
+            Reply -- "More work needed" --> Defer
+            Unbookmark --> Continue
+            Defer --> Continue
+            Continue --> Open-Next
+            Continue -- "Out of time" --> Push-Update
+        end
+
+        Handle-Email -- "Development day?" --> Dev-Day
+
+        subgraph Dev-Day["DEVELOPMENT DAY"]
+            To-Do["Work on personal to-do list"]
+            Projects["Work on top project priorities"]
+        end

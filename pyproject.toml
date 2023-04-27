@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "monoqueue"
+version = "1.0.0.dev0"
+description = "Fight burnout. Stay organized."
+license = {text = "The Unlicense"}
+authors = [{name = "Curtis Rueden", email = "ctrueden@wisc.edu"}]
+readme = "README.md"
+keywords = ["support", "queue"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: The Unlicense (Unlicense)",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Unix",
+    "Operating System :: MacOS",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
+]
+
+requires-python = ">=3.9"
+dependencies = [
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build",
+]
+
+[project.scripts]
+mq = "monoqueue.cli:main"
+
+[project.urls]
+homepage = "https://github.com/ctrueden/monoqueue"
+documentation = "https://github.com/ctrueden/monoqueue/blob/main/README.md"
+source = "https://github.com/ctrueden/monoqueue"
+download = "https://pypi.org/project/monoqueue/"
+tracker = "https://github.com/ctrueden/monoqueue/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
