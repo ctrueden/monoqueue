@@ -160,9 +160,9 @@ Command          | Description
 
 ## Limitations and pitfalls
 
-> Well am I making haste or could it be haste is making me?
-> What's time but a thing to kill or keep or buy or lose or live in?
-> I gotta go faster, keep up the pace
+> Well am I making haste or could it be haste is making me?  
+> What's time but a thing to kill or keep or buy or lose or live in?  
+> I gotta go faster, keep up the pace  
 > Just to stay in the human race
 
 &mdash;Bad Religion - [Supersonic](https://youtu.be/D0RKVCH6O0o)
