@@ -130,12 +130,23 @@ How to make a personal access token:
 - Click green "Generate token" button
 - Copy the resulting token to your clipboard
 - Paste it into `~/.config/monoqueue.conf`
-  as a `github = <your-token>` pair in a `[tokens]` section.
+  as a `token = <your-token>` pair in a `[github]` section.
 
 #### Discourse
 
 The Discourse handler connects to a Discourse forum instance via its API using
 the specified API key.
+
+How to make a Discourse API key:
+- https://forum.yourdiscourseinstance.com/admin/api/keys &rarr; New API Key
+- Description: monoqueue (or whatever you want)
+- User Level: Single User (your username)
+- Scope: Read-only
+- Click the blue "Save" button
+- Copy the resulting key to your clipboard
+- Paste it into `~/.config/monoqueue.conf`
+  as an `key = <your-api-key>` pair in the relevant Discourse section.
+- Also add a `username = <your-username>` pair to that same section.
 
 ## Usage
 
