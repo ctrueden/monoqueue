@@ -60,19 +60,35 @@ vi ~/.config/monoqueue.conf
 Then add content of the form:
 
 ```ini
+[rules]
+rule01 = bookmark                                   -> +20: action bookmark
+rule02 = issue/pull_request                         -> +10: pull request
+rule03 = "ctrueden" in issue/assignees/login        -> +5: assigned to me
+rule04 = ["ctrueden"] == issue/assignees/login      -> +5: assigned to only me
+rule05 = "monoqueue" in title                       -> +5: favorite project (monoqueue)
+rule06 = issue/milestone/title == "unscheduled"     -> -10: unscheduled milestone
+rule07 = issue/milestone/title == "next-release"    -> +3: next-release milestone
+rule08 = "fizzwidget" in topic/tags                 -> +2: fizzwidget tag
+rule09 = "@ctrueden" in issue/body                  -> +2: mentions me
+rule10 = issue/author_association == "CONTRIBUTOR"  -> +1: issue author is non-member
+rule11 = issue/state == "open"                      -> +1: open issue
+rule12 = issue/reactions/total_count                -> +X: number of reactions
+rule13 = issue/comments                             -> +X: number of comments
+rule14 = issue/draft                                -> -2: draft PR
+rule15 = topic/has_accepted_answer is False         -> +2: has no accepted answer
+
 [firefox]
 folder = ACTION
 
 [github]
 token = <your-github-api-token>
-query = org:my-favorite-org+org:my-other-favorite-org+repo:a-repo-I-manage
+query = is:open+org:my-favorite-org+org:my-other-favorite-org+repo:a-repo-I-manage
 
 [forum.example.com]
 handler = discourse
 username = <your-discourse-username-on-forum.example.com>
 key = <discourse-api-key-for-forum.example.com>
 query = #a-category-to-search tags:foo,bar,stuff status:open status:unsolved
-...
 ```
 
 Then protect your secrets:
@@ -81,15 +97,28 @@ Then protect your secrets:
 chmod 600 ~/.config/monoqueue.conf
 ```
 
-Each configuration section declares a source.
+### Rules
 
-### Firefox
+Rules are written in Python syntax, parsed by Python's `ast` module, and evaluated
+using a custom evaluator to avoid calling the insecure `eval` function. The monoqueue
+evaluator supports standard Python unary and binary operators, as well as a special
+overload of the divide (`/`) operator for digging into nested data structures easily.
+
+To figure out your rules, first set up your [sources](#sources), then run `mq up`,
+then browse your monoqueue data in `~/.local/share/monoqueue.data` while studying
+the rules above for inspiration. You can figure it out, I believe in you! <3
+
+### Sources
+
+Apart from the `[rules]`, each configuration section declares a source.
+
+#### Firefox
 
 The Firefox handler scans your local Firefox installation's bookmarks, and
 creates an action item for each item within any folder whose name regex-matches
 the configured one.
 
-### GitHub
+#### GitHub
 
 The GitHub handler connects to GitHub using the specified personal access token,
 and pulls down all GitHub Issues (including Pull Requests) matching the given query.
@@ -103,7 +132,7 @@ How to make a personal access token:
 - Paste it into `~/.config/monoqueue.conf`
   as a `github = <your-token>` pair in a `[tokens]` section.
 
-### Discourse
+#### Discourse
 
 The Discourse handler connects to a Discourse forum instance via its API using
 the specified API key.
