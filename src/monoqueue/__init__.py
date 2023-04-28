@@ -186,9 +186,9 @@ class Monoqueue:
                 sv = consequence[1:consequence.index(":")]
                 v = applies if sv == "X" else float(sv)
                 if op == '+': score_value += v
-                elif op == '-': score_value -= v
+                elif op == '-': score_value = max(1, score_value - v)
                 elif op == 'x': score_value *= v
-                elif op == '/': score_value /= v
+                elif op == '/': score_value = max(1, score_value / v)
                 else: raise RuntimeError(f"Invalid rule consequence: {consequence}")
 
             info["score"] = {"value": score_value, "rules": score_rules}
