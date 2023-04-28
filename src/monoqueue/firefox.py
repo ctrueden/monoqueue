@@ -11,9 +11,7 @@
 Routines to extract information from Firefox's places.sqlite database.
 """
 
-import os
-import shutil
-import sqlite3
+import os, shutil, sqlite3, sys, tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -33,12 +31,15 @@ def update(mq, config):
 
 
 def bookmarks(folder_name=None):
-    temp_db_path = "tmp.places.sqlite" # FIXME: use Python API to make a suitable temp file
-
     firefox_config_dir = Path("~/.mozilla/firefox").expanduser()
     places_dbs = list(firefox_config_dir.glob("*/places.sqlite"))
 
     results = []
+
+    if len(places_dbs) > 0:
+        tf = tempfile.NamedTemporaryFile(delete=False, prefix="firefox", suffix=".sqlite")
+        temp_db_path = tf.name
+        tf.close()
 
     for db in places_dbs:
         # NB: make a copy to avoid locked DB in case Firefox is open.
@@ -66,7 +67,7 @@ def bookmarks(folder_name=None):
             {folder_clause};
             """)
 
-        # FIXME: recently deleted bookmarks are still on the list, even after quitting Firefox?
+        # TODO: recently deleted bookmarks are still on the list, even after quitting Firefox?
         # Test this more, and/or read. What is the separate recently deleted bookmarks table for?
 
         for title, url, date_added, last_modified in items:
