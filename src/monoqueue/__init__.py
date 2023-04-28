@@ -107,7 +107,7 @@ class Monoqueue:
         """
 
         for section, config in self.config.items():
-            if section in ("DEFAULT", "rules"): continue
+            if section in ("DEFAULT", "rules", "scoring"): continue
 
             config["source"] = section
             handler = config.get("handler", section)
@@ -158,10 +158,15 @@ class Monoqueue:
         info = self.info(url)
         score = info["score"]["value"]
         timedelta = now() - s2dt(info["updated"])
-        days_ago = timedelta.total_seconds() / 86400
+        days_ago: float = timedelta.total_seconds() / 86400
         # backlog tackle: multiply times number of days old
         # rapid response: divide by number of days old
-        factor = 1 + (days_ago if backlog else 1.0 / days_ago)
+        one_day_multiplier = (
+            self.config["scoring"].get("one_day_multiplier", 10)
+            if "scoring" in self.config
+            else 10
+        )
+        factor = 1 + (days_ago if backlog else one_day_multiplier / days_ago)
         final = score * factor**2
         log.debug(f"%s age=%f, factor=%f, final=%f", info["title"], days_ago, factor, final)
         return final
