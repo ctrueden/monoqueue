@@ -152,6 +152,13 @@ def evaluate(expr: str, data: Any, node: Any = None):
             value = binary(expr, data, value, op, cmp)
         return value
 
+    if isinstance(node, ast.BoolOp):
+        # NB: No short-circuiting for now.
+        lvalue = evaluate(expr, data, node.values[0])
+        for value in node.values[1:]:
+            lvalue = binary(expr, data, lvalue, node.op, value)
+        return lvalue
+
     if isinstance(node, ast.Name):
         # Look in the data dict for this name.
         if data is None:
