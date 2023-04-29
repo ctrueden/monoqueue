@@ -35,19 +35,18 @@ def cmd_info(*args):
 
 def cmd_ls(*args):
     html = "--html" in args
-    backlog = "--backlog" in args
 
     if html:
         raise RuntimeError("HTML export is not implemented yet")
 
     mq = Monoqueue()
     mq.load()
-    urls = mq.urls(backlog=backlog)
+    urls = mq.urls()
 
     for i, url in enumerate(urls):
         if i > 10: break
         info = mq.info(url)
-        impact = mq.impact(url, backlog=backlog)
+        impact = mq.impact(url)
         print(f"[{impact}] -- {url} -- {info['title']}")
 
     return 0

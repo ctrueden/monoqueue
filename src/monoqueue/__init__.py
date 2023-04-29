@@ -85,18 +85,13 @@ class Monoqueue:
         with open(path, "w") as f:
             json.dump(self.data, f, indent=2)
 
-    def urls(self, backlog: bool = False) -> List[str]:
+    def urls(self) -> List[str]:
         """
         Get the list of action item URLs, ordered by impact score.
-
-        :param backlog:
-            If True, scores older items more highly.
-            If False, scores newer items more highly.
-            The default is False.
         """
         return sorted(
             self.data,
-            key=lambda url: -self.impact(url, backlog=backlog)
+            key=lambda url: -self.impact(url)
         )
 
     def update(self) -> None:
@@ -145,34 +140,27 @@ class Monoqueue:
         """
         return self.data.get(url)
 
-    def impact(self, url: str, backlog: bool = False):
+    def impact(self, url: str):
         """
         Get impact score for the given URL.
         :param url:
-            The action item URL for which to calculate impact score.
-        :param backlog:
-            If True, scores older items more highly.
-            If False, scores newer items more highly.
-            The default is False.
+            The action item URL for which to obtain the impact score.
         """
         info = self.info(url)
-        score = info["score"]["value"]
-        timedelta = now() - s2dt(info["updated"])
-        days_ago: float = timedelta.total_seconds() / 86400
-        # backlog tackle: multiply times number of days old
-        # rapid response: divide by number of days old
-        one_day_multiplier = (
-            self.config["scoring"].get("one_day_multiplier", 10)
-            if "scoring" in self.config
-            else 10
-        )
-        factor = 1 + (days_ago if backlog else one_day_multiplier / days_ago)
-        final = score * factor**2
-        log.debug(f"%s age=%f, factor=%f, final=%f", info["title"], days_ago, factor, final)
-        return final
+        return info["score"]["value"]
 
     def _score(self):
         log.debug("Scoring action items...")
+
+        # Compute time-sensitive age fields.
+        time = now()
+        for info in self.data.values():
+            if "created" in info:
+                created = s2dt(info["created"])
+                info["seconds_since_creation"] = (time - created).total_seconds()
+            if "updated" in info:
+                updated = s2dt(info["updated"])
+                info["seconds_since_update"] = (time - updated).total_seconds()
 
         # Initially, each rule has not applied to any action items.
         unused_rules = set(consequence for _, consequence in self.rules)
@@ -210,7 +198,7 @@ class Monoqueue:
                 sv = consequence[1:consequence.index(":")]
 
                 if sv == "X":
-                    # Evaluation is expected to be the score modification value.
+                    # Evaluation result is the score modification value.
                     v = applies
                     # Replace X with the actual number.
                     consequence = f"{op}{applies}{consequence[2:]}"

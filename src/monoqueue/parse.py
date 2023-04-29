@@ -53,6 +53,19 @@ import ast
 from typing import Any
 
 
+def dictlike(data: Any) -> bool:
+    return hasattr(data, "get")
+
+
+def listlike(data: Any) -> bool:
+    # Meh, iterable is close enough. ;-)
+    return hasattr(data, "__iter__")
+
+
+def diggable(data: Any):
+    return dictlike(data) or listlike(data)
+
+
 def unary(data: Any, expr: str, operand: ast.AST, op: ast.UnaryOp):
     value = evaluate(expr, data, operand)
     if isinstance(op, ast.Invert): return ~value
@@ -62,7 +75,7 @@ def unary(data: Any, expr: str, operand: ast.AST, op: ast.UnaryOp):
 
 
 def binary(expr: str, data: Any, lvalue: Any, op: ast.BinOp, right: ast.AST):
-    if isinstance(op, ast.Div) and isinstance(right, ast.Name):
+    if isinstance(op, ast.Div) and diggable(lvalue) and isinstance(right, ast.Name):
         # NB: Right-side of div operation digs into left-side data structure.
         # E.g. issue/assignees means data['issue']['assignees']
         # because data is a dict, and data['issue'] is also a dict.
@@ -109,6 +122,7 @@ def binary(expr: str, data: Any, lvalue: Any, op: ast.BinOp, right: ast.AST):
 
 def evaluate(expr: str, data: Any, node: Any = None):
     if node is None:
+        # TODO: check whether memoizing AST improves scoring performance
         tree = ast.parse(expr, mode="eval")
         return evaluate(expr, data, tree.body)
 
@@ -160,12 +174,13 @@ def evaluate(expr: str, data: Any, node: Any = None):
         return lvalue
 
     if isinstance(node, ast.Name):
-        # Look in the data dict for this name.
+        # Dig into the data for this name!
+        # Used with the special / binary operator.
         if data is None:
             return None
-        if hasattr(data, "get"): # dict
+        if dictlike(data):
             return data.get(node.id)
-        if hasattr(data, "__iter__"): # list
+        if listlike(data):
             return [evaluate(expr, el, node) for el in data]
         raise ValueError(f"Weird data type: {type(data)}")
 

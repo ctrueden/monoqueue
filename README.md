@@ -62,20 +62,27 @@ Then add content of the form:
 ```ini
 [rules]
 rule01 = bookmark                                   -> +20: action bookmark
-rule02 = issue/pull_request                         -> +10: pull request
-rule03 = "ctrueden" in issue/assignees/login        -> +5: assigned to me
-rule04 = ["ctrueden"] == issue/assignees/login      -> +5: assigned to only me
-rule05 = "monoqueue" in title                       -> +5: favorite project (monoqueue)
-rule06 = issue/milestone/title == "unscheduled"     -> -10: unscheduled milestone
-rule07 = issue/milestone/title == "next-release"    -> +3: next-release milestone
-rule08 = "fizzwidget" in topic/tags                 -> +2: fizzwidget tag
-rule09 = "@ctrueden" in issue/body                  -> +2: mentions me
-rule10 = issue/author_association == "CONTRIBUTOR"  -> +1: issue author is non-member
-rule11 = issue/state == "open"                      -> +1: open issue
-rule12 = issue/reactions/total_count                -> +X: number of reactions
-rule13 = issue/comments                             -> +X: number of comments
-rule14 = issue/draft                                -> -2: draft PR
-rule15 = topic/has_accepted_answer is False         -> +2: has no accepted answer
+
+rule10 = issue/pull_request                         -> +20: pull request
+rule11 = "ctrueden" in issue/assignees/login        -> +5: assigned to me
+rule12 = ["ctrueden"] == issue/assignees/login      -> +5: assigned to only me
+rule13 = "/monoqueue/" in issue/url                 -> +5: favorite project (monoqueue)
+rule14 = issue/milestone/title == "next-release"    -> +3: next-release milestone
+rule15 = "@ctrueden" in issue/body                  -> +2: mentions me
+rule16 = issue/author_association == "CONTRIBUTOR"  -> +5: issue author is non-member
+rule17 = issue/state == "open"                      -> +1: open issue
+rule18 = issue/reactions/total_count                -> +X: number of reactions
+rule19 = issue/comments                             -> +X: number of comments
+rule20 = issue/draft                                -> -2: draft PR
+
+rule50 = topic/has_accepted_answer is False         -> +5: has no accepted answer
+rule51 = "monoqueue" in topic/tags                  -> +5: monoqueue tag
+
+# 10 min = +12960; 1 hour = +2160; 8 hours = +270; 1 day = +90; 1 week = +10; 2 weeks = +5; 1 month = +2
+rule77 = 7776000 / seconds_since_update             -> +X: time since last update (rapid response)
+#rule77 = seconds_since_update / 86400               -> +X: days since last update (backlog tackle)
+
+rule99 = issue/milestone/title == "unscheduled"     -> /100: unscheduled milestone
 
 [firefox]
 folder = ACTION

@@ -22,7 +22,7 @@ from . import Monoqueue, now, s2dt
 
 
 C_OPTION = 1
-C_MODE = 2
+C_HILITE = 2
 C_URL = 3
 C_TITLE = 4
 C_DATES = 5
@@ -34,7 +34,6 @@ class UI:
         self.mq = Monoqueue()
         self.mq.load()
         self.stdscr = stdscr
-        self.backlog = False
         self.jump(0)
 
     def refresh(self):
@@ -69,10 +68,7 @@ class UI:
         self.draw_divider(row + 1)
         self.write(f"Action item {self.index + 1} of {self.count}", row + 2, 0)
         self.write("", row + 3, 0)
-        self.draw_option_line("(O)pen | (N)ext | (P)revious | Defer (1)(2)(3)... | (T)oggle mode | (Q)uit")
-        self.write("Mode: ", row + 4, 0)
-        mode = "Backlog tackle" if self.backlog else "Rapid response"
-        self.write(mode, c=C_MODE)
+        self.draw_option_line("(O)pen | (N)ext | (P)revious | Defer (1)(2)(3)... | (Q)uit")
         self.write("> ", row + 5, 0)
 
     def draw_option_line(self, s):
@@ -117,13 +113,11 @@ class UI:
         if key in ('1', '2', '3', '4', '5', '6', '7', '8', '9'):
             days = ord(key) - ord('0')
             # TODO: mark item as deferred until {now} + {days} in the future.
-        if key in ('t', 'T'):
-            self.backlog = not self.backlog
         return True
 
     def loop(self):
         curses.init_pair(C_OPTION, curses.COLOR_RED, curses.COLOR_BLACK)
-        curses.init_pair(C_MODE, curses.COLOR_YELLOW, curses.COLOR_BLACK)
+        curses.init_pair(C_HILITE, curses.COLOR_YELLOW, curses.COLOR_BLACK)
         curses.init_pair(C_URL, curses.COLOR_CYAN, curses.COLOR_BLACK)
         curses.init_pair(C_TITLE, curses.COLOR_GREEN, curses.COLOR_BLACK)
         curses.init_pair(C_DATES, curses.COLOR_BLUE, curses.COLOR_BLACK)
