@@ -102,15 +102,15 @@ class UI:
         return key
 
     def do_operation(self, key):
-        if key in ('o', 'O'):
+        if key in "oO":
             webbrowser.open(self.url)
-        if key in ('n', 'N'):
+        if key in "nN":
             self.jump(self.index + 1)
-        if key in ('p', 'P'):
+        if key in "pP":
             self.jump(self.index - 1)
-        if key in ('q', 'Q'):
+        if key in "qQ":
             self.quit()
-        if key in ('1', '2', '3', '4', '5', '6', '7', '8', '9'):
+        if key in "123456789":
             days = ord(key) - ord('0')
             # TODO: mark item as deferred until {now} + {days} in the future.
         return True
