@@ -50,6 +50,7 @@ are available, but arbitrary function calls are notably *not* possible.
 
 import ast
 
+from functools import cache
 from typing import Any
 
 
@@ -64,6 +65,11 @@ def listlike(data: Any) -> bool:
 
 def diggable(data: Any):
     return dictlike(data) or listlike(data)
+
+
+@cache
+def tree(expr: str):
+    return ast.parse(expr, mode="eval").body
 
 
 def unary(data: Any, expr: str, operand: ast.AST, op: ast.UnaryOp):
@@ -122,9 +128,7 @@ def binary(expr: str, data: Any, lvalue: Any, op: ast.BinOp, right: ast.AST):
 
 def evaluate(expr: str, data: Any, node: Any = None):
     if node is None:
-        # TODO: check whether memoizing AST improves scoring performance
-        tree = ast.parse(expr, mode="eval")
-        return evaluate(expr, data, tree.body)
+        return evaluate(expr, data, tree(expr))
 
     if not isinstance(node, ast.AST):
         return node
