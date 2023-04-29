@@ -13,6 +13,8 @@ The monoqueue command line tool.
 
 import sys
 
+from pprint import pprint
+
 from . import Monoqueue, ui
 from .log import log, setup_logging
 
@@ -23,12 +25,13 @@ def cmd_info(*args):
         return 3
 
     mq = Monoqueue()
+    mq.load()
     for url in mq.urls():
         if any(arg for arg in args if arg in url):
             info = mq.info(url)
             print(f"[{url}]")
-            print(json.dumps(info, indent=2))
-            print
+            pprint(info)
+            print()
 
     return 0
 
