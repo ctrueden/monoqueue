@@ -11,7 +11,7 @@
 A curses-based user interface to monoqueue.
 """
 
-import curses, re, sys, webbrowser
+import curses, datetime, re, sys, webbrowser
 
 from . import Monoqueue, now, s2dt
 
@@ -112,7 +112,7 @@ class UI:
             self.quit()
         if key in "123456789":
             days = ord(key) - ord('0')
-            # TODO: mark item as deferred until {now} + {days} in the future.
+            self.defer(days)
         return True
 
     def loop(self):
@@ -133,6 +133,9 @@ class UI:
         self.count = len(urls)
         self.index = max(0, min(index, self.count - 1))
         self.url = urls[self.index]
+
+    def defer(self, days):
+        self.mq.defer(self.url, now() + datetime.timedelta(days=days))
 
 
 def main(*args):
