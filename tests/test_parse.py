@@ -52,6 +52,15 @@ class TestParse(unittest.TestCase):
         self.assertTrue(parse.evaluate("'Gallant' in people/name", self.data))
         self.assertFalse(parse.evaluate("'Gallant' in people/age", self.data))
 
+    def test_boolean_ops(self):
+        self.assertTrue(parse.evaluate("True or False", self.data))
+        self.assertFalse(parse.evaluate("True and False", self.data))
+        self.assertTrue(parse.evaluate("False or True or False", self.data))
+        self.assertFalse(parse.evaluate("True and True and False", self.data))
+        self.assertTrue(parse.evaluate("True or False and False", self.data)) # True or (False and False) -> True or False
+        self.assertFalse(parse.evaluate("True and False or False", self.data)) # (True and False) or False -> False or False
+
+
     def test_slash_access(self):
         self.assertEqual(44, parse.evaluate("outer/inner/innermost", self.data))
         self.assertEqual(["Goofus", "Gallant"], parse.evaluate("people/name", self.data))
