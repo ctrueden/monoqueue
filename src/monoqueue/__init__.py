@@ -174,27 +174,62 @@ class Monoqueue:
     def _score(self):
         log.debug("Scoring action items...")
 
+        # Initially, each rule has not applied to any action items.
+        unused_rules = set(consequence for _, consequence in self.rules)
+
         for url, info in self.data.items():
             score_value = 1
             score_rules = []
             for expression, consequence in self.rules:
-                # TODO: Add comments explaining this mess.
+                # Try to apply the rule to this action item.
                 applies = evaluate(expression, info)
-                if not applies: continue
-                score_rules.append(consequence)
+                if not applies: continue # Rule does not apply.
+
+                # The rule applies. Mark it as used.
+                if consequence in unused_rules: unused_rules.remove(consequence)
+
+                # Consequences are of the form:
+                #
+                #   +3: next-release milestone
+                #   ^^  ^
+                #   ||  \-- description
+                #   |\----- score modification value
+                #   \------ operator (+, -, x, or /)
+                #
+                # So in the above example, the score should increase by 3.
+                #
+                # If the score modification value is X instead of a number,
+                # it is expected the rule application will return the number.
+                # For example:
+                #
+                #   issue/comments -> +X: number of comments
+                #
+                # The above rule should increase the score by the comment count.
+
                 op = consequence[0]
                 sv = consequence[1:consequence.index(":")]
-                v = applies if sv == "X" else float(sv)
+
+                if sv == "X":
+                    # Evaluation is expected to be the score modification value.
+                    v = applies
+                    # Replace X with the actual number.
+                    consequence = f"{op}{applies}{consequence[2:]}"
+                else:
+                    v = float(sv)
+
+                # Now change the score using the operator and score modification value.
                 if op == '+': score_value += v
                 elif op == '-': score_value = max(1, score_value - v)
                 elif op == 'x': score_value *= v
                 elif op == '/': score_value = max(1, score_value / v)
                 else: raise RuntimeError(f"Invalid rule consequence: {consequence}")
 
+                # Record the consequence on this item's list of applied rules.
+                score_rules.append(consequence)
+
             info["score"] = {"value": score_value, "rules": score_rules}
 
         # Warn about rules that never applied to an action item.
-        used_rules = set(rule for info in self.data.values() for rule in info["score"]["rules"])
         for _, consequence in self.rules:
-            if not consequence in used_rules:
+            if consequence in unused_rules:
                 log.warning(f"Irrelevant rule: %s", consequence)
