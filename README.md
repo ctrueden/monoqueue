@@ -112,8 +112,8 @@ evaluator supports standard Python unary and binary operators, as well as a spec
 overload of the divide (`/`) operator for digging into nested data structures easily.
 
 To figure out your rules, first set up your [sources](#sources), then run `mq up`,
-then browse your monoqueue data in `~/.local/share/monoqueue.data` while studying
-the rules above for inspiration. You can figure it out, I believe in you! <3
+then browse your monoqueue data in `~/.local/share/monoqueue/items.json` while
+studying the rules above for inspiration. You can do it, I believe in you! <3
 
 ### Sources
 

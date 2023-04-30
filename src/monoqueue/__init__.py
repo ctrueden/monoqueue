@@ -31,7 +31,7 @@ HANDLERS = {
 
 class Monoqueue:
     _DEFAULT_CONFIG_PATH = Path("~/.config/monoqueue.conf").expanduser()
-    _DEFAULT_DATA_PATH = Path("~/.local/share/monoqueue.data").expanduser()
+    _DEFAULT_DATA_PATH = Path("~/.local/share/monoqueue/items.json").expanduser()
 
     def __init__(self, config: Dict = None):
         if config is None:
@@ -62,6 +62,7 @@ class Monoqueue:
             log.debug("No existing data at %s", path)
 
     def save(self, path: Path = _DEFAULT_DATA_PATH) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w") as f:
             json.dump(self.data, f, indent=2)
 
