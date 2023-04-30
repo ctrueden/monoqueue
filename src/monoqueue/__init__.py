@@ -11,12 +11,13 @@
 The monoqueue data structure with core business logic.
 """
 
-import configparser, datetime, json, re, sys
+import configparser, datetime, json
 
 from pathlib import Path
 from typing import Dict, Optional, List
 
 from . import discourse, firefox, github
+from . import time
 from .log import log
 from .parse import evaluate
 
@@ -26,27 +27,6 @@ HANDLERS = {
     "firefox": firefox.update,
     "github": github.update,
 }
-
-
-def now() -> datetime.datetime:
-    """
-    Get the current date, in UTC.
-    """
-    return datetime.datetime.now(tz=datetime.timezone.utc)
-
-
-def s2dt(timestamp: str) -> datetime.datetime:
-    """
-    Parse a string to a datetime object.
-    """
-    # Credit: https://stackoverflow.com/a/969324/1207769
-    if re.match("\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\\.\d+Z$", timestamp):
-        # GitHub style, without millisecond.
-        return datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f%z")
-    if re.match("\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", timestamp):
-        # Discourse style, with millisecond.
-        return datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
-    raise ValueError(f"Weird timestamp: {timestamp}")
 
 
 class Monoqueue:
@@ -153,14 +133,14 @@ class Monoqueue:
         log.debug("Scoring action items...")
 
         # Compute time-sensitive age fields.
-        time = now()
+        now = time.now()
         for info in self.data.values():
             if "created" in info:
-                created = s2dt(info["created"])
-                info["seconds_since_creation"] = (time - created).total_seconds()
+                created_age = time.age(info["created"])
+                info["seconds_since_creation"] = created_age.total_seconds()
             if "updated" in info:
-                updated = s2dt(info["updated"])
-                info["seconds_since_update"] = (time - updated).total_seconds()
+                updated_age = time.age(info["updated"])
+                info["seconds_since_update"] = updated_age.total_seconds()
 
         # Initially, each rule has not applied to any action items.
         unused_rules = set(consequence for _, consequence in self.rules)

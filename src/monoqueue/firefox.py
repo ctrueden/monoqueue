@@ -12,8 +12,9 @@ Routines to extract information from Firefox's places.sqlite database.
 """
 
 import os, shutil, sqlite3, sys, tempfile
-from datetime import datetime
 from pathlib import Path
+
+from . import time
 
 
 def update(mq, config):
@@ -74,8 +75,8 @@ def bookmarks(folder_name=None):
             results.append({
                 "title": title,
                 "url": url,
-                "dateAdded": _ts2dt2s(date_added),
-                "lastModified": _ts2dt2s(last_modified),
+                "dateAdded": time.int2str(date_added / 1000000),
+                "lastModified": time.int2str(last_modified / 1000000),
             })
 
         cx.close()
@@ -83,15 +84,6 @@ def bookmarks(folder_name=None):
     os.remove(temp_db_path)
 
     return results
-
-
-def _ts2dt2s(v):
-    """Timestamp -> datetime -> string."""
-    dt = datetime.fromtimestamp(v / 1000000)
-    s = dt.isoformat()
-    plus = s.find("+")
-    if plus >= 0: s = s[:plus]
-    return s + "Z"
 
 
 def main(*args):

@@ -11,9 +11,9 @@
 A curses-based user interface to monoqueue.
 """
 
-import curses, datetime, re, sys, webbrowser
+import curses, re, sys, webbrowser
 
-from . import Monoqueue, now, s2dt
+from . import Monoqueue, time
 
 # A nice curses tutorial can be found at:
 # https://docs.python.org/3/howto/curses.html#curses-howto
@@ -55,7 +55,7 @@ class UI:
         # Left column
         self.write(f"Created: {created}", 3, lc_indent, c=C_DATES)
         self.write(f"Updated: {updated}", 4, lc_indent, c=C_DATES)
-        self.write(f"Age: {now() - s2dt(updated)}", 5, lc_indent, c=C_DATES)
+        self.write(f"Age: {time.age(updated)}", 5, lc_indent, c=C_DATES)
         l_row = 6
         # Right column
         self.write(f"Impact: {impact}", 3, rc_indent, c=C_SCORE)
@@ -102,17 +102,11 @@ class UI:
         return key
 
     def do_operation(self, key):
-        if key in "oO":
-            webbrowser.open(self.url)
-        if key in "nN":
-            self.jump(self.index + 1)
-        if key in "pP":
-            self.jump(self.index - 1)
-        if key in "qQ":
-            self.quit()
-        if key in "123456789":
-            days = ord(key) - ord('0')
-            self.defer(days)
+        if key in "oO": webbrowser.open(self.url)
+        elif key in "nN": self.jump(self.index + 1)
+        elif key in "pP": self.jump(self.index - 1)
+        elif key in "qQ": self.quit()
+        elif key in "123456789": self.defer(ord(key) - ord('0'))
         return True
 
     def loop(self):
@@ -135,7 +129,7 @@ class UI:
         self.url = urls[self.index]
 
     def defer(self, days):
-        self.mq.defer(self.url, now() + datetime.timedelta(days=days))
+        self.mq.defer(self.url, time.days_later(days))
 
 
 def main(*args):
