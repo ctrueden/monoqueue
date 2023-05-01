@@ -130,6 +130,7 @@ class UI:
 
     def defer(self, days):
         self.mq.defer(self.url, time.days_later(days))
+        self.mq.save()
 
 
 def main(*args):

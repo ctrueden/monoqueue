@@ -64,6 +64,9 @@ def cmd_up(*args):
     mq = Monoqueue()
     # TODO: Is this too hacky? Think about it.
     mq.progress = lambda more: print(".", flush=True, end="" if more else None)
+    # TODO: mq.load() existing data first, so that deferrals are preserved.
+    # But does mq.update() overwrite deferral metadata?
+    # If so, also need to fix that in Monoqueue class.
     mq.update()
     mq.save()
     return 0

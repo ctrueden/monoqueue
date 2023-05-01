@@ -66,14 +66,18 @@ class Monoqueue:
         with open(path, "w") as f:
             json.dump(self.data, f, indent=2)
 
-    def urls(self) -> List[str]:
+    def urls(self, active_only=True) -> List[str]:
         """
         Get the list of action item URLs, ordered by impact score.
         """
-        return sorted(
-            self.data,
-            key=lambda url: -self.impact(url)
+        urls = []
+        urls.extend(
+            (url for url in self.data if self.active(url))
+            if active_only
+            else self.data
         )
+        urls.sort(key=self.impact, reverse=True)
+        return urls
 
     def update(self) -> None:
         """
@@ -119,7 +123,33 @@ class Monoqueue:
         :param timedelta:
             datetime.timedelta object indicating deferral time.
         """
-        raise RuntimeError("Unimplemented")
+        info = self.info(url)
+        info["deferred_at"] = time.string(time.now())
+        info["deferred_until"] = time.string(timedelta)
+
+    def active(self, url: str) -> bool:
+        """
+        Get whether the given URL's action item is currently active.
+        If it was previously deferred until later, and the deferral
+        time has not yet come to pass, then the URL will be inactive.
+        :param url:
+            The action item URL to check if active.
+        :return:
+            True if the action item is currently active, False if not.
+        """
+        if not url in self.data: return False
+        info = self.info(url)
+        if not "deferred_until" in info: return True
+
+        if "deferred_at" in info and "updated" in info:
+            # Check whether item has changed since deferral occurred.
+            deferred_at = time.str2dt(info["deferred_at"])
+            updated = time.str2dt(info["updated"])
+            if updated > deferred_at: return True
+
+        # Check whether the deferral time has already passed.
+        deferred_until = time.str2dt(info["deferred_until"])
+        return time.now() >= deferred_until
 
     def impact(self, url: str) -> float:
         """
