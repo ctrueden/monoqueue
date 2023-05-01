@@ -75,8 +75,8 @@ def bookmarks(folder_name=None):
             results.append({
                 "title": title,
                 "url": url,
-                "dateAdded": time.int2str(date_added / 1000000),
-                "lastModified": time.int2str(last_modified / 1000000),
+                "dateAdded": time.string(date_added / 1000000),
+                "lastModified": time.string(last_modified / 1000000),
             })
 
         cx.close()

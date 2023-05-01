@@ -44,17 +44,20 @@ def str2dt(timestamp: str) -> datetime.datetime:
     raise ValueError(f"Weird timestamp: {timestamp}")
 
 
-def int2str(timestamp: int) -> str:
+def string(timestamp: Union[datetime.datetime, int]) -> str:
     """
-    Converts a POSIX timestamp (seconds since epoch)
-    to an ISO-8601-formatted timestamp string.
+    Converts a timestamp to an ISO-8601-formatted timestamp string.
     :param timestamp:
-        POSIX timestamp (seconds since epoch).
+        Timestamp, either as a datetime object, or an
+        int-valued POSIX timestamp (seconds since epoch).
     :return:
         Timestamp string in ISO 8601 format.
     """
-    dt: datetime.datetime = datetime.fromtimestamp(timestamp)
-    s: str = dt.isoformat()
+    if isinstance(timestamp, int):
+        timestamp = datetime.datetime.fromtimestamp(timestamp)
+    if not hasattr(timestamp, "isoformat"):
+        raise ValueError(f"Invalid timestamp type: {type(timestamp)}")
+    s: str = timestamp.isoformat()
     plus = s.find("+")
     if plus >= 0: s = s[:plus]
     return s + "Z"
