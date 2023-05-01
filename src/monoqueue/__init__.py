@@ -178,21 +178,22 @@ class Monoqueue:
                 # The above rule should increase the score by the comment count.
 
                 op = consequence[0]
-                sv = consequence[1:consequence.index(":")]
+                smv = consequence[1:consequence.index(":")]
 
-                if sv == "X":
-                    # Evaluation result is the score modification value.
-                    v = applies
+                if smv == "X":
+                    # Score mod value is the rule evaluation result.
+                    smv = float(applies)
                     # Replace X with the actual number.
                     consequence = f"{op}{applies}{consequence[2:]}"
                 else:
-                    v = float(sv)
+                    # Score mod value is a constant declared in the consequence.
+                    smv = float(smv)
 
                 # Now change the score using the operator and score modification value.
-                if op == '+': score_value += v
-                elif op == '-': score_value = max(1, score_value - v)
-                elif op == 'x': score_value *= v
-                elif op == '/': score_value = max(1, score_value / v)
+                if op == '+': score_value += smv
+                elif op == '-': score_value = max(1, score_value - smv)
+                elif op == 'x': score_value *= smv
+                elif op == '/': score_value = max(1, score_value / smv)
                 else: raise RuntimeError(f"Invalid rule consequence: {consequence}")
 
                 # Record the consequence on this item's list of applied rules.
