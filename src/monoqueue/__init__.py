@@ -111,7 +111,7 @@ class Monoqueue:
         """
         return self.data.get(url)
 
-    def defer(self, url: str, timedelta: datetime.timedelta):
+    def defer(self, url: str, timedelta: datetime.timedelta) -> None:
         """
         Defer the given action item for a specified amount of time.
         :param url:
@@ -121,11 +121,13 @@ class Monoqueue:
         """
         raise RuntimeError("Unimplemented")
 
-    def impact(self, url: str):
+    def impact(self, url: str) -> float:
         """
         Get impact score for the given URL.
         :param url:
             The action item URL for which to obtain the impact score.
+        :return:
+            The impact score.
         """
         info = self.info(url)
         return info["score"]["value"]
