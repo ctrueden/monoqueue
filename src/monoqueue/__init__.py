@@ -105,6 +105,12 @@ class Monoqueue:
         # Recalculate item scores.
         self._score()
 
+    def info(self, url: str) -> Optional[Dict]:
+        """
+        Get metadata for the given URL.
+        """
+        return self.data.get(url)
+
     def defer(self, url: str, timedelta: datetime.timedelta):
         """
         Defer the given action item for a specified amount of time.
@@ -114,12 +120,6 @@ class Monoqueue:
             datetime.timedelta object indicating deferral time.
         """
         raise RuntimeError("Unimplemented")
-
-    def info(self, url: str) -> Optional[Dict]:
-        """
-        Get metadata for the given URL.
-        """
-        return self.data.get(url)
 
     def impact(self, url: str):
         """
