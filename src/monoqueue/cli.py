@@ -28,9 +28,13 @@ def cmd_info(*args):
     mq.load()
     for url in mq.urls():
         if any(arg for arg in args if arg in url):
-            info = mq.info(url)
+            metadata = mq.metadata(url)
+            impact = mq.impact(url)
+            item = mq.item(url)
             print(f"[{url}]")
-            pprint(info)
+            pprint("<No local metadata>" if metadata is None else metadata)
+            pprint("<No computed impact>" if impact is None else impact)
+            pprint("<No action item data>" if item is None else item)
             print()
 
     return 0
@@ -48,7 +52,7 @@ def cmd_ls(*args):
 
     for i, url in enumerate(urls):
         if i > 10: break
-        info = mq.info(url)
+        item = mq.item(url)
         impact = mq.impact(url)
         print(f"[{impact}] -- {url} -- {info['title']}")
 
