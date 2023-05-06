@@ -14,7 +14,7 @@ The monoqueue data structure with core business logic.
 import configparser, datetime, json
 
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Any, Dict, Optional, List
 
 from . import discourse, firefox, github
 from . import time
@@ -29,16 +29,25 @@ HANDLERS = {
 }
 
 
+class ImpactScore:
+    def __init__(self, value, rules):
+        self.value = value
+        self.rules = rules
+
+
 class Monoqueue:
     _DEFAULT_CONFIG_PATH = Path("~/.config/monoqueue.conf").expanduser()
-    _DEFAULT_DATA_PATH = Path("~/.local/share/monoqueue/items.json").expanduser()
+    _DEFAULT_ITEMS_PATH = Path("~/.local/share/monoqueue/items.json").expanduser()
+    _DEFAULT_METADATA_PATH = Path("~/.local/share/monoqueue/metadata.json").expanduser()
 
     def __init__(self, config: Dict = None):
         if config is None:
             config = configparser.ConfigParser()
             config.read(Monoqueue._DEFAULT_CONFIG_PATH)
         self.config = config
-        self.data = {}
+        self._items = {}
+        self._impact = {}
+        self._metadata = {}
         self.progress = None
 
         # load rules from config
@@ -53,18 +62,20 @@ class Monoqueue:
             self.rules.append((expression, consequence))
         log.debug("Parsed %d rules", len(self.rules))
 
-    def load(self, path: Path = _DEFAULT_DATA_PATH) -> None:
-        if path.exists():
-            with open(path) as f:
-                self.data = json.load(f)
-            self._score()
-        else:
-            log.debug("No existing data at %s", path)
+    def load(self,
+        items_path: Path = _DEFAULT_ITEMS_PATH,
+        metadata_path: Path = _DEFAULT_METADATA_PATH
+    ) -> None:
+        self._items = self._load(items_path)
+        self._metadata = self._load(metadata_path)
+        if self._items: self._score()
 
-    def save(self, path: Path = _DEFAULT_DATA_PATH) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(self.data, f, indent=2)
+    def save(self,
+        items_path: Path = _DEFAULT_ITEMS_PATH,
+        metadata_path: Path = _DEFAULT_METADATA_PATH
+    ) -> None:
+        self._save(self._items, items_path)
+        self._save(self._metadata, metadata_path)
 
     def urls(self, active_only=True) -> List[str]:
         """
@@ -72,11 +83,11 @@ class Monoqueue:
         """
         urls = []
         urls.extend(
-            (url for url in self.data if self.active(url))
+            (url for url in self._items if self.active(url))
             if active_only
-            else self.data
+            else self._items
         )
-        urls.sort(key=self.impact, reverse=True)
+        urls.sort(key=lambda url: self.impact(url).value, reverse=True)
         return urls
 
     def update(self) -> None:
@@ -101,19 +112,40 @@ class Monoqueue:
             update = HANDLERS[handler]
             if update is not None: update(self, config)
 
-            log.debug("Action item count -> %d", len(self.data))
-
-        # Persist the updated queue to disk.
-        self.save()
+            log.debug("Action item count -> %d", len(self._items))
 
         # Recalculate item scores.
         self._score()
 
-    def info(self, url: str) -> Optional[Dict]:
+    def item(self, url: str) -> Optional[Dict[str, Any]]:
         """
-        Get metadata for the given URL.
+        Get action item data for the given URL.
+
+        This information is retrieved from remote sources,
+        unlike mq.metadata(url), which is locally managed info.
+
+        :param url:
+            The URL of the action item data to retrieve.
+        :return:
+            Information relating to the action item, or None if no such item.
         """
-        return self.data.get(url)
+        return self._items.get(url)
+
+    def metadata(self, url: str) -> Dict[str, Any]:
+        """
+        Get metadata (e.g. deferrals) for the given URL.
+
+        Unlike mq.item(url), metadata is managed locally
+        rather than being retrieved from remote sources.
+
+        :param url:
+            The URL of the action item metadata to retrieve.
+        :return:
+            Metadata relating to the action item.
+        """
+        if not url in self._metadata:
+            self._metadata[url] = {}
+        return self._metadata[url]
 
     def defer(self, url: str, timedelta: datetime.timedelta) -> None:
         """
@@ -123,9 +155,9 @@ class Monoqueue:
         :param timedelta:
             datetime.timedelta object indicating deferral time.
         """
-        info = self.info(url)
-        info["deferred_at"] = time.string(time.now())
-        info["deferred_until"] = time.string(timedelta)
+        metadata = self.metadata(url)
+        metadata["deferred_at"] = time.string(time.now())
+        metadata["deferred_until"] = time.string(timedelta)
 
     def active(self, url: str) -> bool:
         """
@@ -137,21 +169,22 @@ class Monoqueue:
         :return:
             True if the action item is currently active, False if not.
         """
-        if not url in self.data: return False
-        info = self.info(url)
-        if not "deferred_until" in info: return True
+        if url not in self._items: return False
+        metadata = self.metadata(url)
+        if metadata is None or "deferred_until" not in metadata: return True
 
-        if "deferred_at" in info and "updated" in info:
+        item = self.item(url)
+        if "deferred_at" in metadata and "updated" in metadata:
             # Check whether item has changed since deferral occurred.
-            deferred_at = time.str2dt(info["deferred_at"])
-            updated = time.str2dt(info["updated"])
+            deferred_at = time.str2dt(metadata["deferred_at"])
+            updated = time.str2dt(item["updated"])
             if updated > deferred_at: return True
 
         # Check whether the deferral time has already passed.
-        deferred_until = time.str2dt(info["deferred_until"])
+        deferred_until = time.str2dt(metadata["deferred_until"])
         return time.now() >= deferred_until
 
-    def impact(self, url: str) -> float:
+    def impact(self, url: str) -> ImpactScore:
         """
         Get impact score for the given URL.
         :param url:
@@ -159,26 +192,43 @@ class Monoqueue:
         :return:
             The impact score.
         """
-        info = self.info(url)
-        return info["score"]["value"]
+        return self._impact.get(url)
+
+    def _load(self, path: Path) -> Dict[str, Any]:
+        log.debug("Loading %s...", path)
+
+        if path is None or not path.exists():
+            log.debug("No existing items at %s", path)
+            return {}
+        with open(path) as f:
+            return json.load(f)
+
+    def _save(self, data: Dict[str, Any], path: Path) -> None:
+        log.debug("Saving %s...", path)
+
+        if data is None or path is None: return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
 
     def _score(self):
         log.debug("Scoring action items...")
 
         # Compute time-sensitive age fields.
         now = time.now()
-        for info in self.data.values():
-            if "created" in info:
-                created_age = time.age(info["created"])
-                info["seconds_since_creation"] = created_age.total_seconds()
-            if "updated" in info:
-                updated_age = time.age(info["updated"])
-                info["seconds_since_update"] = updated_age.total_seconds()
+        for item in self._items.values():
+            if "created" in item:
+                created_age = time.age(item["created"])
+                item["seconds_since_creation"] = created_age.total_seconds()
+            if "updated" in item:
+                updated_age = time.age(item["updated"])
+                item["seconds_since_update"] = updated_age.total_seconds()
 
         # Initially, each rule has not applied to any action items.
         unused_rules = set(consequence for _, consequence in self.rules)
 
-        for url, info in self.data.items():
+        self._impact.clear()
+        for url, info in self._items.items():
             score_value = 1
             score_rules = []
             for expression, consequence in self.rules:
@@ -229,9 +279,9 @@ class Monoqueue:
                 # Record the consequence on this item's list of applied rules.
                 score_rules.append(consequence)
 
-            info["score"] = {"value": score_value, "rules": score_rules}
+            self._impact[url] = ImpactScore(score_value, score_rules)
 
         # Warn about rules that never applied to an action item.
         for _, consequence in self.rules:
             if consequence in unused_rules:
-                log.warning(f"Irrelevant rule: %s", consequence)
+                log.debug(f"Irrelevant rule: %s", consequence)

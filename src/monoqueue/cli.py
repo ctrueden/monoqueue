@@ -26,12 +26,25 @@ def cmd_info(*args):
 
     mq = Monoqueue()
     mq.load()
-    for url in mq.urls():
+    for url in mq.urls(active_only=False):
         if any(arg for arg in args if arg in url):
-            info = mq.info(url)
+            metadata = mq.metadata(url)
+            impact = mq.impact(url)
+            item = mq.item(url)
+
             print(f"[{url}]")
-            pprint(info)
-            print()
+
+            if metadata: pprint(metadata)
+            else: print("<No local metadata>")
+
+            if impact:
+                pprint(impact.rules)
+                print(f"Impact score: {impact.value}")
+            else:
+                print("<No computed impact>")
+
+            if item: pprint(item)
+            else: print("<No action item data>")
 
     return 0
 
@@ -48,9 +61,9 @@ def cmd_ls(*args):
 
     for i, url in enumerate(urls):
         if i > 10: break
-        info = mq.info(url)
+        item = mq.item(url)
         impact = mq.impact(url)
-        print(f"[{impact}] -- {url} -- {info['title']}")
+        print(f"[{impact.value}] -- {url} -- {item['title']}")
 
     return 0
 
@@ -62,13 +75,15 @@ def cmd_ui(*args):
 
 def cmd_up(*args):
     mq = Monoqueue()
+
     # TODO: Is this too hacky? Think about it.
     mq.progress = lambda more: print(".", flush=True, end="" if more else None)
-    # TODO: mq.load() existing data first, so that deferrals are preserved.
-    # But does mq.update() overwrite deferral metadata?
-    # If so, also need to fix that in Monoqueue class.
+
     mq.update()
-    mq.save()
+
+    # Persist the updated action items to disk.
+    mq.save(metadata_path=None)
+
     return 0
 
 

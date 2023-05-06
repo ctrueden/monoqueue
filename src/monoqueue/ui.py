@@ -42,13 +42,14 @@ class UI:
     def draw_screen(self):
         self.stdscr.clear()
 
-        info = self.mq.info(self.url)
-        created = info["created"]
-        updated = info["updated"]
+        item = self.mq.item(self.url)
+        impact = self.mq.impact(self.url)
+        created = item["created"]
+        updated = item["updated"]
         impact = self.mq.impact(self.url)
 
         self.write(self.url, 0, c=C_URL)
-        self.write(info["title"], 1, c=C_TITLE)
+        self.write(item["title"], 1, c=C_TITLE)
 
         lc_indent = 2
         rc_indent = 40
@@ -58,9 +59,9 @@ class UI:
         self.write(f"Age: {time.age(updated)}", 5, lc_indent, c=C_DATES)
         l_row = 6
         # Right column
-        self.write(f"Impact: {impact}", 3, rc_indent, c=C_SCORE)
+        self.write(f"Impact: {impact.value}", 3, rc_indent, c=C_SCORE)
         r_row = 4
-        for rule in info["score"]["rules"]:
+        for rule in impact.rules:
             self.write(f"* {rule}", r_row, rc_indent, c=C_SCORE)
             r_row += 1
 
@@ -130,7 +131,12 @@ class UI:
 
     def defer(self, days):
         self.mq.defer(self.url, time.days_later(days))
-        self.mq.save()
+
+        # Persist the updated metadata to disk.
+        self.mq.save(items_path=None)
+
+        # Refresh the display.
+        self.jump(self.index)
 
 
 def main(*args):
