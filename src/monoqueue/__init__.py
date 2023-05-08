@@ -45,7 +45,7 @@ class Monoqueue:
             config = configparser.ConfigParser()
             config.read(Monoqueue._DEFAULT_CONFIG_PATH)
         self.config = config
-        self._items = {}
+        self.items = {}
         self._impact = {}
         self._metadata = {}
         self.progress = None
@@ -66,15 +66,15 @@ class Monoqueue:
         items_path: Path = _DEFAULT_ITEMS_PATH,
         metadata_path: Path = _DEFAULT_METADATA_PATH
     ) -> None:
-        self._items = self._load(items_path)
+        self.items = self._load(items_path)
         self._metadata = self._load(metadata_path)
-        if self._items: self._score()
+        if self.items: self._score()
 
     def save(self,
         items_path: Path = _DEFAULT_ITEMS_PATH,
         metadata_path: Path = _DEFAULT_METADATA_PATH
     ) -> None:
-        self._save(self._items, items_path)
+        self._save(self.items, items_path)
         self._save(self._metadata, metadata_path)
 
     def urls(self, active_only=True) -> List[str]:
@@ -83,9 +83,9 @@ class Monoqueue:
         """
         urls = []
         urls.extend(
-            (url for url in self._items if self.active(url))
+            (url for url in self.items if self.active(url))
             if active_only
-            else self._items
+            else self.items
         )
         urls.sort(key=lambda url: self.impact(url).value, reverse=True)
         return urls
@@ -112,7 +112,7 @@ class Monoqueue:
             update = HANDLERS[handler]
             if update is not None: update(self, config)
 
-            log.debug("Action item count -> %d", len(self._items))
+            log.debug("Action item count -> %d", len(self.items))
 
         # Recalculate item scores.
         self._score()
@@ -129,7 +129,7 @@ class Monoqueue:
         :return:
             Information relating to the action item, or None if no such item.
         """
-        return self._items.get(url)
+        return self.items.get(url)
 
     def metadata(self, url: str) -> Dict[str, Any]:
         """
@@ -169,7 +169,7 @@ class Monoqueue:
         :return:
             True if the action item is currently active, False if not.
         """
-        if url not in self._items: return False
+        if url not in self.items: return False
         metadata = self.metadata(url)
         if metadata is None or "deferred_until" not in metadata: return True
 
@@ -216,7 +216,7 @@ class Monoqueue:
 
         # Compute time-sensitive age fields.
         now = time.now()
-        for item in self._items.values():
+        for item in self.items.values():
             if "created" in item:
                 created_age = time.age(item["created"])
                 item["seconds_since_creation"] = created_age.total_seconds()
@@ -228,7 +228,7 @@ class Monoqueue:
         unused_rules = set(consequence for _, consequence in self.rules)
 
         self._impact.clear()
-        for url, info in self._items.items():
+        for url, info in self.items.items():
             score_value = 1
             score_rules = []
             for expression, consequence in self.rules:

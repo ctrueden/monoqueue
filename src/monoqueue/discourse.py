@@ -40,10 +40,10 @@ def update(mq, config):
 
     for topic in search.topics:
         url = f"{baseurl}/t/{topic['id']}"
-        if not url in mq.data:
-            mq.data[url] = {}
+        if not url in mq.items:
+            mq.items[url] = {}
 
-        mq.data[url].update({
+        mq.items[url].update({
             "title": topic["title"],
             "created": topic["created_at"],
             "updated": topic["last_posted_at"],

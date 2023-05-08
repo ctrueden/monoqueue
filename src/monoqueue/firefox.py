@@ -20,10 +20,10 @@ from . import time
 def update(mq, config):
     for bookmark in bookmarks(config["folder"]):
         url = bookmark["url"]
-        if not url in mq.data:
-            mq.data[url] = {}
+        if not url in mq.items:
+            mq.items[url] = {}
 
-        mq.data[url].update({
+        mq.items[url].update({
             "title": bookmark["title"],
             "created": bookmark["dateAdded"],
             "updated": bookmark["lastModified"],

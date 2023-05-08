@@ -26,10 +26,10 @@ def update(mq, config):
 
     for issue in ghi.issues:
         url = issue["html_url"]
-        if not url in mq.data:
-            mq.data[url] = {}
+        if not url in mq.items:
+            mq.items[url] = {}
 
-        mq.data[url].update({
+        mq.items[url].update({
             "title": issue["title"],
             "created": issue["created_at"],
             "updated": issue["updated_at"],
