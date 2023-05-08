@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "monoqueue"
-version = "1.0.1"
+version = "1.0.2.dev0"
 description = "Fight burnout. Stay organized."
 license = {text = "The Unlicense"}
 authors = [{name = "Curtis Rueden", email = "ctrueden@wisc.edu"}]
