@@ -46,7 +46,7 @@ class GitHubIssues:
     def __init__(self, items=None, token=None):
         self._token = token
         self.issues = [] if items is None else items
-        self._delay_per_request = 6
+        self._delay_per_request = 7
         self._max_requests = 100
         self._progress = None
 
