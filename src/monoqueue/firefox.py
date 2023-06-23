@@ -42,6 +42,9 @@ def bookmarks(folder_name=None):
     places_dbs = []
     for config_dir in config_dirs:
         sqlite_db_files = Path(config_dir).expanduser().glob("*/places.sqlite")
+        if log.is_debug():
+            for db_file in sqlite_db_files:
+                log.debug(f"Found Firefox sqlite DB: {db_file}")
         places_dbs.extend(sqlite_db_files)
 
     if len(places_dbs) == 0:
