@@ -23,7 +23,8 @@ curl -i -sS -X GET -G https://forum.image.sc/search.json \
   -H "Api-Username: ctrueden" | tee image-sc-forum-search-page-2.json
 """
 
-import json, sys, time
+import json
+import time
 
 import requests
 

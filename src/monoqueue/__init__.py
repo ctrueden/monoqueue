@@ -11,8 +11,9 @@
 The monoqueue data structure with core business logic.
 """
 
-import configparser, datetime, json
-
+import configparser
+import datetime
+import json
 from pathlib import Path
 from typing import Any, Dict, Optional, List
 
@@ -20,7 +21,6 @@ from . import discourse, firefox, github
 from . import time
 from .log import log
 from .parse import evaluate
-
 
 HANDLERS = {
     "discourse": discourse.update,

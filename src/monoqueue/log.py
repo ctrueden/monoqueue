@@ -11,7 +11,8 @@
 The monoqueue logger.
 """
 
-import logging, os
+import logging
+import os
 
 log = logging.getLogger("monoqueue")
 log.is_critical = lambda: log.isEnabledFor(logging.CRITICAL)

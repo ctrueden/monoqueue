@@ -11,8 +11,8 @@
 Utility functions for working with dates and times.
 """
 
-import datetime, re
-
+import datetime
+import re
 from typing import Union
 
 

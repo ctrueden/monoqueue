@@ -11,7 +11,8 @@
 Routines to download and organize information from GitHub.
 """
 
-import json, sys, time
+import json
+import time
 
 import requests
 

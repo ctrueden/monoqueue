@@ -12,7 +12,6 @@ The monoqueue command line tool.
 """
 
 import sys
-
 from pprint import pprint
 
 from . import Monoqueue, ui

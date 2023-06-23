@@ -11,7 +11,10 @@
 A curses-based user interface to monoqueue.
 """
 
-import curses, re, sys, webbrowser
+import curses
+import re
+import sys
+import webbrowser
 
 from . import Monoqueue, time
 

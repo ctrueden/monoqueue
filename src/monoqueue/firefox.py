@@ -11,7 +11,11 @@
 Routines to extract information from Firefox's places.sqlite database.
 """
 
-import os, shutil, sqlite3, sys, tempfile
+import os
+import shutil
+import sqlite3
+import sys
+import tempfile
 from pathlib import Path
 
 from . import time
