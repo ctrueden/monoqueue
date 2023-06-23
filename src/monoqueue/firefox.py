@@ -15,6 +15,7 @@ import os, shutil, sqlite3, sys, tempfile
 from pathlib import Path
 
 from . import time
+from .log import log
 
 
 def update(mq, config):
@@ -32,15 +33,24 @@ def update(mq, config):
 
 
 def bookmarks(folder_name=None):
-    firefox_config_dir = Path("~/.mozilla/firefox").expanduser()
-    places_dbs = list(firefox_config_dir.glob("*/places.sqlite"))
-
     results = []
 
-    if len(places_dbs) > 0:
-        tf = tempfile.NamedTemporaryFile(delete=False, prefix="firefox", suffix=".sqlite")
-        temp_db_path = tf.name
-        tf.close()
+    config_dirs = [
+        "~/.mozilla/firefox",
+        "~/snap/firefox/common/.mozilla/firefox",
+    ]
+    places_dbs = []
+    for config_dir in config_dirs:
+        sqlite_db_files = Path(config_dir).expanduser().glob("*/places.sqlite")
+        places_dbs.extend(sqlite_db_files)
+
+    if len(places_dbs) == 0:
+        log.warning("No Firefox sqlite DBs found!")
+        return results
+
+    tf = tempfile.NamedTemporaryFile(delete=False, prefix="firefox", suffix=".sqlite")
+    temp_db_path = tf.name
+    tf.close()
 
     for db in places_dbs:
         # NB: make a copy to avoid locked DB in case Firefox is open.
