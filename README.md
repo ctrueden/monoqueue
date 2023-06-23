@@ -45,8 +45,7 @@ pip install monoqueue
 Or from source:
 
 ```shell
-git clone https://github.com/ctrueden/monoqueue
-pip install --user -e monoqueue
+pip install --user git+https://github.com/ctrueden/monoqueue.git#egg=monoqueue
 ```
 
 And put `~/.local/bin` on your path.
