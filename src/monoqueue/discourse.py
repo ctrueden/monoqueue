@@ -23,9 +23,11 @@ curl -i -sS -X GET -G https://forum.image.sc/search.json \
   -H "Api-Username: ctrueden" | tee image-sc-forum-search-page-2.json
 """
 
-import json, logging, sys, time
+import json, sys, time
 
 import requests
+
+from .log import log
 
 
 def update(mq, config):
@@ -95,7 +97,7 @@ class DiscourseSearch:
         if self._key: headers['Api-Key'] = f"{self._key}"
         if self._username: headers['Api-Username'] = f"{self._username}"
 
-        logging.debug("Downloading %s page %d", url, page)
+        log.debug("Downloading %s page %d", url, page)
         params = {"q": query, "page": page}
         response = requests.get(url, params=params, headers=headers)
         response.raise_for_status()

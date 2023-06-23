@@ -11,9 +11,11 @@
 Routines to download and organize information from GitHub.
 """
 
-import json, logging, sys, time
+import json, sys, time
 
 import requests
+
+from .log import log
 
 
 def update(mq, config):
@@ -80,7 +82,7 @@ class GitHubIssues:
         headers = {'User-Agent': 'monoqueue'}
         if self._token: headers['Authorization'] = f"token {self._token}"
 
-        logging.debug("Downloading %s", url)
+        log.debug("Downloading %s", url)
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         result = response.json()
