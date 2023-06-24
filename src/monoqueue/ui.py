@@ -52,30 +52,41 @@ class UI:
         created = item["created"]
         updated = item["updated"]
         impact = self.mq.impact(self.url)
+        issue = item.get("issue")
+        body = issue.get("body") if issue else None
 
-        self.write(self.url, 0, c=C_URL)
-        self.write(item["title"], 1, c=C_TITLE)
+        row = -1
+        self.write(self.url, (row := row + 1), c=C_URL)
+        self.write(item["title"], (row := row + 1), c=C_TITLE)
 
-        lc_indent = 2
-        rc_indent = 40
-        # Left column
-        self.write(f"Created: {created}", 3, lc_indent, c=C_DATES)
-        self.write(f"Updated: {updated}", 4, lc_indent, c=C_DATES)
-        self.write(f"Age: {time.age(updated)}", 5, lc_indent, c=C_DATES)
-        l_row = 6
-        # Right column
-        self.write(f"Impact: {impact.value}", 3, rc_indent, c=C_SCORE)
-        r_row = 4
-        for rule in impact.rules:
-            self.write(f"* {rule}", r_row, rc_indent, c=C_SCORE)
-            r_row += 1
-
-        row = max(l_row, r_row)
-        self.draw_divider(row + 1)
-        self.write(f"Action item {self.index + 1} of {self.count}", row + 2, 0)
-        self.write("", row + 3, 0)
+        self.draw_divider(row := row + 1)
+        self.write(f"Action item {self.index + 1} of {self.count}", (row := row + 1), 0)
+        self.write("", (row := row + 1), 0)
         self.draw_option_line("(O)pen | (N)ext | (P)revious | Defer (1)(2)(3)... | (Q)uit")
-        self.write("> ", row + 5, 0)
+        prompt_row = (row := row + 1)
+        self.draw_divider(row := row + 1)
+
+        # Left column
+        l_row = row
+        l_col = 2
+        self.write(f"Created: {created}", (l_row := l_row + 1), l_col, c=C_DATES)
+        self.write(f"Updated: {updated}", (l_row := l_row + 1), l_col, c=C_DATES)
+        self.write(f"Age: {time.age(updated)}", (l_row := l_row + 1), l_col, c=C_DATES)
+
+        # Right column
+        r_row = row
+        r_col = 40
+        self.write(f"Impact: {impact.value}", (r_row := r_row + 1), r_col, c=C_SCORE)
+        for rule in impact.rules:
+            self.write(f"* {rule}", (r_row := r_row + 1), r_col, c=C_SCORE)
+
+        # Body, if available
+        row = max(l_row, r_row)
+        self.draw_divider(row := row + 1)
+        # if body: self.write(f"***{body}***", (row := row + 1), 0)
+
+        # Cursor prompt
+        self.write("> ", prompt_row, 0)
 
     def draw_option_line(self, s):
         option = False
@@ -96,6 +107,7 @@ class UI:
         if x is None and y is None:
             self.stdscr.addstr(s, curses.color_pair(c))
         else:
+            # TODO: bounds check coords vs screen size
             self.stdscr.addstr(y, x, s, curses.color_pair(c))
 
     def quit(self, exit_code=0):
