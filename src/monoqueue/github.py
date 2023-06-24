@@ -29,7 +29,7 @@ def update(mq, config):
 
     for issue in ghi.issues:
         url = issue["html_url"]
-        if not url in mq.items:
+        if url not in mq.items:
             mq.items[url] = {}
 
         mq.items[url].update({

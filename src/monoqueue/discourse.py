@@ -17,7 +17,7 @@ curl -X GET https://forum.image.sc/c/development/5.json \
  -H "Api-Username: ctrueden" | tee result
 
 curl -i -sS -X GET -G https://forum.image.sc/search.json \
-  --data-urlencode 'q=#development tags:imagej,imagej2,fiji,scijava,scifio status:open status:unsolved' \ 
+  --data-urlencode 'q=#development tags:imagej,imagej2,fiji,scijava,scifio status:open status:unsolved' \
   --data-urlencode 'page=2' \
   -H "Api-Key: <your-key-here>" \
   -H "Api-Username: ctrueden" | tee image-sc-forum-search-page-2.json
@@ -43,7 +43,7 @@ def update(mq, config):
 
     for topic in search.topics:
         url = f"{baseurl}/t/{topic['id']}"
-        if not url in mq.items:
+        if url not in mq.items:
             mq.items[url] = {}
 
         mq.items[url].update({

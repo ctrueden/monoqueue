@@ -37,6 +37,9 @@ class UI:
         self.mq = Monoqueue()
         self.mq.load()
         self.stdscr = stdscr
+        self.url = None
+        self.index = None
+        self.count = None
         self.jump(0)
 
     def refresh(self):
@@ -46,7 +49,6 @@ class UI:
         self.stdscr.clear()
 
         item = self.mq.item(self.url)
-        impact = self.mq.impact(self.url)
         created = item["created"]
         updated = item["updated"]
         impact = self.mq.impact(self.url)
@@ -77,7 +79,7 @@ class UI:
 
     def draw_option_line(self, s):
         option = False
-        for token in re.split("(\([A-Z0-9]\))", s):
+        for token in re.split("(\\([A-Z0-9]\\))", s):
             self.write(token, c=C_OPTION if option else 0)
             option = not option
 
@@ -105,7 +107,7 @@ class UI:
         self.refresh()
         return key
 
-    def do_operation(self, key):
+    def do_operation(self, key: str):
         if key in "oO": webbrowser.open(self.url)
         elif key in "nN": self.jump(self.index + 1)
         elif key in "pP": self.jump(self.index - 1)

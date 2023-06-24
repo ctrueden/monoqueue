@@ -25,7 +25,7 @@ from .log import log
 def update(mq, config):
     for bookmark in bookmarks(config["folder"]):
         url = bookmark["url"]
-        if not url in mq.items:
+        if url not in mq.items:
             mq.items[url] = {}
 
         mq.items[url].update({

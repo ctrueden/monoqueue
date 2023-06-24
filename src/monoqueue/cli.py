@@ -68,7 +68,7 @@ def cmd_ls(*args):
 
 
 def cmd_ui(*args):
-    ui.main()
+    ui.main(*args)
     return 0
 
 
@@ -108,12 +108,10 @@ Valid commands:
     args = args[1:]
 
     if command == "info": return cmd_info(*args)
-    elif command == "ls": return cmd_ls(*args)
-    elif command == "ui": return cmd_ui(*args)
-    elif command == "up": return cmd_up(*args)
-    else:
-        log.error("Invalid subcommand: %s", command)
-        sys.stderr.write(usage)
-        return 250
+    if command == "ls": return cmd_ls(*args)
+    if command == "ui": return cmd_ui(*args)
+    if command == "up": return cmd_up(*args)
 
-    return 0
+    log.error("Invalid subcommand: %s", command)
+    sys.stderr.write(usage)
+    return 250

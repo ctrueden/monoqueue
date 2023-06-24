@@ -58,7 +58,7 @@ class Monoqueue:
             if not arrow:
                 raise ValueError(f"Invalid rule: {v}")
             expression = v[:arrow].strip()
-            consequence = v[arrow+2:].strip()
+            consequence = v[arrow + 2:].strip()
             self.rules.append((expression, consequence))
         log.debug("Parsed %d rules", len(self.rules))
 
@@ -71,8 +71,8 @@ class Monoqueue:
         if self.items: self._score()
 
     def save(self,
-        items_path: Path = _DEFAULT_ITEMS_PATH,
-        metadata_path: Path = _DEFAULT_METADATA_PATH
+        items_path: Optional[Path] = _DEFAULT_ITEMS_PATH,
+        metadata_path: Optional[Path] = _DEFAULT_METADATA_PATH
     ) -> None:
         self._save(self.items, items_path)
         self._save(self._metadata, metadata_path)
@@ -105,7 +105,7 @@ class Monoqueue:
 
             log.info("Updating %s...", section)
 
-            if not handler in HANDLERS:
+            if handler not in HANDLERS:
                 raise f"Unsupported source type: {handler}"
 
             # Execute the handler's update function.
@@ -143,21 +143,21 @@ class Monoqueue:
         :return:
             Metadata relating to the action item.
         """
-        if not url in self._metadata:
+        if url not in self._metadata:
             self._metadata[url] = {}
         return self._metadata[url]
 
-    def defer(self, url: str, timedelta: datetime.timedelta) -> None:
+    def defer(self, url: str, until: datetime.datetime) -> None:
         """
         Defer the given action item for a specified amount of time.
         :param url:
             The URL of the action item to defer.
-        :param timedelta:
-            datetime.timedelta object indicating deferral time.
+        :param until:
+            datetime.datetime object indicating deferral time.
         """
         metadata = self.metadata(url)
         metadata["deferred_at"] = time.string(time.now())
-        metadata["deferred_until"] = time.string(timedelta)
+        metadata["deferred_until"] = time.string(until)
 
     def active(self, url: str) -> bool:
         """
@@ -194,7 +194,8 @@ class Monoqueue:
         """
         return self._impact.get(url)
 
-    def _load(self, path: Path) -> Dict[str, Any]:
+    @staticmethod
+    def _load(path: Path) -> Dict[str, Any]:
         log.debug("Loading %s...", path)
 
         if path is None or not path.exists():
@@ -203,7 +204,8 @@ class Monoqueue:
         with open(path) as f:
             return json.load(f)
 
-    def _save(self, data: Dict[str, Any], path: Path) -> None:
+    @staticmethod
+    def _save(data: Dict[str, Any], path: Path) -> None:
         log.debug("Saving %s...", path)
 
         if data is None or path is None: return
@@ -215,7 +217,6 @@ class Monoqueue:
         log.debug("Scoring action items...")
 
         # Compute time-sensitive age fields.
-        now = time.now()
         for item in self.items.values():
             if "created" in item:
                 created_age = time.age(item["created"])
@@ -234,7 +235,7 @@ class Monoqueue:
             for expression, consequence in self.rules:
                 # Try to apply the rule to this action item.
                 applies = evaluate(expression, info)
-                if not applies: continue # Rule does not apply.
+                if not applies: continue  # Rule does not apply.
 
                 # The rule applies. Mark it as used.
                 if consequence in unused_rules: unused_rules.remove(consequence)

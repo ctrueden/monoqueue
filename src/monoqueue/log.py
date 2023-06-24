@@ -21,6 +21,7 @@ log.is_warning = lambda: log.isEnabledFor(logging.WARNING)
 log.is_info = lambda: log.isEnabledFor(logging.INFO)
 log.is_debug = lambda: log.isEnabledFor(logging.DEBUG)
 
+
 def setup_logging():
     level = (
         logging.DEBUG

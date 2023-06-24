@@ -35,10 +35,10 @@ def str2dt(timestamp: str) -> datetime.datetime:
         Parsed datetime.datetime object of the timestamp.
     """
     # Credit: https://stackoverflow.com/a/969324/1207769
-    if re.match("\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\\.\d+Z$", timestamp):
+    if re.match("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d+Z$", timestamp):
         # GitHub style, without millisecond.
         return datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f%z")
-    if re.match("\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", timestamp):
+    if re.match("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", timestamp):
         # Discourse style, with millisecond.
         return datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
     raise ValueError(f"Weird timestamp: {timestamp}")

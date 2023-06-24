@@ -197,11 +197,11 @@ def evaluate(expr: str, data: Any, node: Any = None):
 
     if isinstance(node, ast.Call):
         func = node.func.id
-        #print(ast.dump(node, indent=4))
-        #if func == "all":
-        #    pass
-        #if func == "any":
-        #    pass
+        # print(ast.dump(node, indent=4))
+        # if func == "all":
+        #     pass
+        # if func == "any":
+        #     pass
         raise TypeError(f"Unsupported function call: {func}")
 
     raise TypeError(f"Unsupported {type(node)} expression: {ast.get_source_segment(expr, node)}")

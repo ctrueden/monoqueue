@@ -34,14 +34,14 @@ class TestParse(unittest.TestCase):
         }
     }
 
-    #def test_any(self):
-    #    self.assertTrue(parse.evaluate("any(greeting in farewells for greeting in greetings)", self.data))
-    #    self.assertTrue(parse.evaluate("any(name == 'Gallant' for name in people/name)", self.data))
-    #    self.assertFalse(parse.evaluate("any(name == 'Chuckles' for name in people/name)", self.data))
+    # def test_any(self):
+    #     self.assertTrue(parse.evaluate("any(greeting in farewells for greeting in greetings)", self.data))
+    #     self.assertTrue(parse.evaluate("any(name == 'Gallant' for name in people/name)", self.data))
+    #     self.assertFalse(parse.evaluate("any(name == 'Chuckles' for name in people/name)", self.data))
 
-    #def test_all(self):
-    #    self.assertTrue(parse.evaluate("all(age < 15 for age in people/age)", self.data))
-    #    self.assertFalse(parse.evaluate("all(age > 13 for age in people/age)", self.data))
+    # def test_all(self):
+    #     self.assertTrue(parse.evaluate("all(age < 15 for age in people/age)", self.data))
+    #     self.assertFalse(parse.evaluate("all(age > 13 for age in people/age)", self.data))
 
     def test_binary_op(self):
         self.assertEqual(["Goofus", "Gallant", 13, 14], parse.evaluate("people/name + people/age", self.data))
@@ -57,9 +57,12 @@ class TestParse(unittest.TestCase):
         self.assertFalse(parse.evaluate("True and False", self.data))
         self.assertTrue(parse.evaluate("False or True or False", self.data))
         self.assertFalse(parse.evaluate("True and True and False", self.data))
-        self.assertTrue(parse.evaluate("True or False and False", self.data)) # True or (False and False) -> True or False
-        self.assertFalse(parse.evaluate("True and False or False", self.data)) # (True and False) or False -> False or False
 
+        # True or (False and False) -> True or False
+        self.assertTrue(parse.evaluate("True or False and False", self.data))
+
+        # (True and False) or False -> False or False
+        self.assertFalse(parse.evaluate("True and False or False", self.data))
 
     def test_slash_access(self):
         self.assertEqual(44, parse.evaluate("outer/inner/innermost", self.data))
