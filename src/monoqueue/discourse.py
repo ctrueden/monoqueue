@@ -103,7 +103,8 @@ class DiscourseSearch:
         response = requests.get(url, params=params, headers=headers)
         response.raise_for_status()
         result = response.json()
-        self.topics.extend(result['topics'])
+        if "topics" in result:
+            self.topics.extend(result['topics'])
 
         gsr = result.get("grouped_search_result", {})
         return gsr.get('more_full_page_results', False)
