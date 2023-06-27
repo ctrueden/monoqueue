@@ -37,6 +37,12 @@ K_LT = (75, 69, 89, 95, 76, 69, 70, 84)
 K_RT = (75, 69, 89, 95, 82, 73, 71, 72, 84)
 K_PGUP = (75, 69, 89, 95, 80, 80, 65, 71, 69)
 K_PGDN = (75, 69, 89, 95, 78, 80, 65, 71, 69)
+K_HOME = (75, 69, 89, 95, 72, 79, 77, 69)
+K_END = (75, 69, 89, 95, 69, 78, 68)
+K_CTRL_B = (2,)
+K_CTRL_D = (4,)
+K_CTRL_F = (6,)
+K_CTRL_U = (21,)
 
 class UI:
     def __init__(self, stdscr):
@@ -192,8 +198,10 @@ class UI:
         elif key in "123456789": self.defer(ord(key) - ord('0'))
         elif key in "jJ" or code == K_DN: self.scroll(1)
         elif key in "kK" or code == K_UP: self.scroll(-1)
-        elif code == K_PGDN: self.scroll(curses.LINES // 2)
-        elif code == K_PGUP: self.scroll(-curses.LINES // 2)
+        elif code in (K_PGDN, K_CTRL_D, K_CTRL_F): self.scroll(curses.LINES // 2)
+        elif code in (K_PGUP, K_CTRL_U, K_CTRL_B): self.scroll(-curses.LINES // 2)
+        elif code == K_HOME: self.scroll(-2**30)
+        elif key == "G" or code == K_END: self.scroll(2**30)
         return True
 
     def loop(self):
