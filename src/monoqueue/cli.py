@@ -58,11 +58,28 @@ def cmd_ls(*args):
     mq.load()
     urls = mq.urls()
 
+    def inlo(fragment, string):
+        return fragment.lower() in string.lower()
+
+    def contains(url, item, arg):
+        if inlo(arg, url) or inlo(arg, item['title']): return True
+        return (
+            'issue' in item
+            and item['issue'] is not None
+            and 'body' in item['issue']
+            and item['issue']['body'] is not None
+            and inlo(arg, item['issue']['body'])
+        )
+
+    w = len(str(len(urls)))
     for i, url in enumerate(urls):
-        if i > 10: break
         item = mq.item(url)
+
+        # Filter out non-matching items.
+        if any(not contains(url, item, arg) for arg in args): continue
+
         impact = mq.impact(url)
-        print(f"[{impact.value}] -- {url} -- {item['title']}")
+        print(f"{i:>{w}} [{impact.value}] -- {url} -- {item['title']}")
 
     return 0
 
