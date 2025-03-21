@@ -85,11 +85,15 @@ class DiscourseSearch:
         Download content from Discourse according to the given query.
         """
         url = f"{self._baseurl}/search.json"
+
+        # Note: Discourse API returns 400 when requesting page no > 10.
+        page_limit = 10
+
         page = 1
         for _ in range(self._max_requests):
             more = self._download_page(url, query, page)
             if self._progress: self._progress(more)
-            if not more: break
+            if page >= page_limit or not more: break
             page += 1
             time.sleep(self._delay_per_request)
 
