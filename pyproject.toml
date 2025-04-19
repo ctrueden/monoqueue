@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "monoqueue"
 version = "1.1.1.dev0"
 description = "Fight burnout. Stay organized."
-license = {text = "The Unlicense"}
+license = "Unlicense"
 authors = [{name = "Curtis Rueden", email = "ctrueden@wisc.edu"}]
 readme = "README.md"
 keywords = ["support", "queue"]
@@ -17,7 +17,6 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: The Unlicense (Unlicense)",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: Unix",
     "Operating System :: MacOS",
