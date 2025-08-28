@@ -69,7 +69,7 @@ def bookmarks(folder_name=None):
         if folder_name is not None:
             folder_ids = cx.execute(f"""
                 select id from moz_bookmarks
-                where type = 2 and title = \"{folder_name}\";
+                where type = 2 and title = '{folder_name}';
                 """)
 
             ids = ", ".join(str(folder_id) for folder_id, in folder_ids)
