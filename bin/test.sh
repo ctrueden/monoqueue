@@ -11,7 +11,7 @@ cd "$dir/.."
 
 if [ $# -gt 0 ]
 then
-  python -m unittest -v $@
+  uv run python -m unittest -v $@
 else
-  python -m unittest -v tests/*.py
+  uv run python -m unittest -v tests/*.py
 fi
