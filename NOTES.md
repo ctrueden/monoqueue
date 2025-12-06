@@ -34,7 +34,7 @@ I have the following categories of support:
 
 I also have a [Community support project board](https://github.com/users/ctrueden/projects/1/views/1), but I hate it because it's too much manual effort. (Maybe I could sync my support queue status to this board automatically, for public viewing?)
 
-There are also Habitica To Do's, but those can probably remain separate.
+There are also Google Tasks for more calendar-sensitive items, but those remain separate.
 
 I want to sort the support feeds by an impact score, and then work on items in impact order.
 
