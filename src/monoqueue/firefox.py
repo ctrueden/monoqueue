@@ -42,6 +42,7 @@ def bookmarks(folder_name=None):
     config_dirs = [
         "~/.mozilla/firefox",
         "~/snap/firefox/common/.mozilla/firefox",
+        "~/Library/Application Support/Firefox/Profiles",
     ]
     places_dbs = []
     for config_dir in config_dirs:
