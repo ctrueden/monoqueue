@@ -29,9 +29,11 @@ dependencies = [
     "requests",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "build",
+    "ruff",
+    "validate-pyproject[all]",
 ]
 
 [project.scripts]
