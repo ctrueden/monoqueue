@@ -38,17 +38,19 @@ You're only human; use monoqueue to be your best within a limited time budget.
 
 ## Installation
 
+It is recommended to install Python-based tools like monoqueue using
+[uv](https://docs.astral.sh/uv/):
+
 ```shell
-pip install monoqueue
+uv tool install monoqueue
 ```
 
 Or from source:
 
 ```shell
-pip install --user git+https://github.com/ctrueden/monoqueue.git#egg=monoqueue
+git clone https://github.com/ctrueden/monoqueue
+uv tool install --reinstall-package monoqueue --with-editable monoqueue monoqueue
 ```
-
-And put `~/.local/bin` on your path.
 
 ## Configuration
 
