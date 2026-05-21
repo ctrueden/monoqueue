@@ -138,6 +138,10 @@ How to make a personal access token:
 - Paste it into `~/.config/monoqueue.conf`
   as a `token = <your-token>` pair in a `[github]` section.
 
+For performance across multiple invocations, GitHub content is cached beneath
+`~/.cache/monoqueue/github/`, with subsequent queries being limited to updates
+since the last query.
+
 #### Discourse
 
 The Discourse handler connects to a Discourse forum instance via its API using
