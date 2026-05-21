@@ -30,12 +30,13 @@ DEFAULT_MAX_AGE = 14400  # 4 hours
 
 def update(mq, config):
     orgs, users = _parse_owners(config["query"])
-    items = fetch_items(
-        orgs=orgs,
-        users=users,
-        token=config.get("token"),
-        progress=mq.progress,
-    )
+    progress = None
+    if mq.progress:
+        def progress(fetched, total):
+            mq.progress(True)
+    items = fetch_items(orgs=orgs, users=users, token=config.get("token"), progress=progress)
+    if mq.progress:
+        mq.progress(None)
     for issue in items:
         url = issue["html_url"]
         mq.items.setdefault(url, {}).update({
@@ -75,7 +76,10 @@ def fetch_items(
         if oldest is not None:
             age = (_parse_ts(fetch_start) - _parse_ts(oldest)).total_seconds()
             if age <= max_age:
-                return list(cached_items.values())
+                items = list(cached_items.values())
+                if progress:
+                    progress(len(items), len(items))
+                return items
             since = oldest
         else:
             cached_items, since = {}, None
@@ -191,9 +195,9 @@ class GitHubIssues:
         """Download issues from GitHub according to the given query."""
         url = self._search_url(query)
         for _ in range(_MAX_PAGES):
-            url = self._download_page(url, query)
+            url, total = self._download_page(url, query)
             if self._progress:
-                self._progress(url)
+                self._progress(len(self.issues), total)
             if not url:
                 break
             time.sleep(_DELAY)
@@ -207,11 +211,12 @@ class GitHubIssues:
         resp.raise_for_status()
         data = resp.json()
         self.issues.extend(data["items"])
+        total = data.get("total_count", len(self.issues))
         next_url = resp.links.get("next", {}).get("url")
-        if not next_url and data.get("total_count", 0) > 1000 and data["items"]:
+        if not next_url and total > 1000 and data["items"]:
             # Work around GitHub's 1000-result search cap.
             next_url = self._search_url(f"{query}+created:>{data['items'][-1]['created_at']}")
-        return next_url
+        return next_url, total
 
     @staticmethod
     def _search_url(query):
