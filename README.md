@@ -1,5 +1,9 @@
 # Monoqueue
 
+[![License](https://img.shields.io/pypi/l/monoqueue.svg)](https://github.com/ctrueden/monoqueue/raw/main/UNLICENSE)
+[![PyPI](https://img.shields.io/pypi/v/monoqueue.svg)](https://pypi.org/project/monoqueue)
+[![Python Version](https://img.shields.io/pypi/pyversions/monoqueue.svg)](https://python.org)
+
 *Fight burnout. Stay organized.*
 
 ## Purpose
