@@ -13,6 +13,8 @@ Routines to download and organize information from GitHub.
 
 import datetime
 import json
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -34,7 +36,8 @@ def update(mq, config):
     if mq.progress:
         def progress(fetched, total):
             mq.progress(True)
-    items = fetch_items(orgs=orgs, users=users, token=config.get("token"), progress=progress)
+    token = config.get("token") or gh_token()
+    items = fetch_items(orgs=orgs, users=users, token=token, progress=progress)
     if mq.progress:
         mq.progress(None)
     for issue in items:
@@ -44,6 +47,17 @@ def update(mq, config):
             "updated": issue["updated_at"],
             "issue": issue,
         })
+
+
+def gh_token():
+    """
+    Get the GitHub token of the gh command line tool, if it is logged in.
+    This avoids needing a separate token in the monoqueue configuration.
+    """
+    if not shutil.which("gh"): return None
+    result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, check=False)
+    token = result.stdout.strip()
+    return token if result.returncode == 0 and token else None
 
 
 def fetch_items(

@@ -96,6 +96,15 @@ folder = ACTION
 token = <your-github-api-token>
 query = is:open+org:my-favorite-org+org:my-other-favorite-org+repo:a-repo-I-manage
 
+[tabs]
+pull = my-desktop
+exclude =
+  ^https://mail\.google\.com/
+  ^https://calendar\.google\.com/
+
+[scijava]
+dev_id = <your-scijava-developer-id>
+
 [forum.example.com]
 handler = discourse
 username = <your-discourse-username-on-forum.example.com>
@@ -130,10 +139,68 @@ The Firefox handler scans your local Firefox installation's bookmarks, and
 creates an action item for each item within any folder whose name regex-matches
 the configured one.
 
+#### Firefox tabs
+
+The tabs handler creates an action item for each open Firefox tab,
+across all your devices. Tabs open on several devices become one item,
+which also merges with matching items from other sources (e.g. a tab
+showing a GitHub issue merges with that issue from the GitHub source).
+
+On a computer with Firefox, `mq snapshot` writes that computer's tabs,
+plus the tabs of your other devices as synced by Firefox Sync, to
+`~/.local/share/monoqueue/tabs/<hostname>.json`. Only each tab's URL,
+title and last access time are saved. The tabs handler reads the local
+Firefox (if any) plus all snapshots in that directory, using the most
+recently seen tabs of each device.
+
+To gather tabs on a computer without Firefox, such as an always-on
+server, list desktops in the `pull` option: monoqueue then runs
+`mq snapshot -` on each via ssh (see `pull_command`) during `mq up`.
+If a desktop is off, its previous snapshot is used. Since Firefox Sync
+already shares tabs between devices, pulling from one desktop is
+enough to see the tabs of all of them.
+
+Options:
+- `pull`: hosts to pull snapshots from via ssh.
+- `pull_command`: the command to pull a snapshot, with `{host}` for the
+  host; default: `ssh -o BatchMode=yes -o ConnectTimeout=5 {host} '~/.local/bin/mq snapshot -'`.
+- `exclude`: regular expressions, one per line, for URLs to ignore.
+  Pinned tabs are always ignored.
+- `max_device_age_days`: skip devices not seen for this many days (default 30).
+- `dir`: where snapshots live (default `~/.local/share/monoqueue/tabs`).
+- `local`: set to `false` to ignore this computer's Firefox.
+
+Rules can use `tabs/device`, and `seconds_since_tab_access` for how long
+ago you last looked at any of the item's tabs.
+
+#### SciJava team
+
+The scijava handler reads your community obligations from the
+[SciJava team portal](https://status.scijava.org/team), and tags each
+item with its roles there, for use in rules such as:
+
+```ini
+rule30 = "reviewer_prs" in scijava/roles      -> +10: SciJava PR review
+rule31 = "maintainer_releases" in scijava/roles -> +5: SciJava release
+rule32 = "stale_status" in scijava/roles      -> +50: status page broken
+```
+
+Only roles listed in the `include` option (default:
+`reviewer_prs, maintainer_releases`) create new items; other roles
+(`support_issues`, `debugger_bugs`, `developer_features`) only tag items
+found by other sources, so as not to flood the queue. Put the
+`[scijava]` section after `[github]` so that those items exist first.
+
+If the portal's data is older than `max_age_days` (default 2), an item
+is added prompting you to fix the job that generates it.
+
 #### GitHub
 
 The GitHub handler connects to GitHub using the specified personal access token,
 and pulls down all GitHub Issues (including Pull Requests) matching the given query.
+
+If no token is configured and the [GitHub CLI](https://cli.github.com/)
+is logged in, its token (from `gh auth token`) is used instead.
 
 How to make a personal access token:
 - https://github.com/settings/tokens &rarr; Generate new token &rarr; Generate new token (classic)
@@ -172,6 +239,7 @@ Command          | Description
 `mq ui`          | Launch the interactive user interface.
 `mq ls`          | List action items in plaintext.
 `mq ls --html`   | List action items as an HTML report.
+`mq snapshot`    | Save open Firefox tabs, for `tabs` sources elsewhere.
 `mq info <url>`  | Show detailed info about an action item.
 
 ## Limitations and pitfalls
