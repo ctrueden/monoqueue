@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 
 from . import caldav, discourse, firefox, github, scijava
 from . import time, urls
+from .lock import lock, write_json
 from .log import log
 from .parse import evaluate
 
@@ -100,6 +101,7 @@ class Monoqueue:
         self.items = {}
         self._impact = {}
         self._metadata = {}
+        self._dirty_metadata = set()
         self.progress = None
         self.sources_dir = Monoqueue._DEFAULT_SOURCES_DIR
 
@@ -127,18 +129,38 @@ class Monoqueue:
         metadata_path: Path = _DEFAULT_METADATA_PATH
     ) -> None:
         self.items = self._load(items_path)
-        self._metadata = {}
-        for url, metadata in self._load(metadata_path).items():
-            # Metadata from older versions may be keyed by unnormalized URLs.
-            self.metadata(url).update(metadata)
+        self._metadata = self._load_metadata(metadata_path)
+        self._dirty_metadata.clear()
         if self.items: self._score()
 
     def save(self,
         items_path: Optional[Path] = _DEFAULT_ITEMS_PATH,
         metadata_path: Optional[Path] = _DEFAULT_METADATA_PATH
     ) -> None:
+        """
+        Save action items and/or metadata to disk.
+
+        Metadata may be changed by several monoqueue processes at once
+        (e.g. two UI sessions), so only metadata changed by this process
+        is written, merged with what is on disk; other processes' changes
+        are then visible to this one too.
+        """
         self._save(self.items, items_path)
-        self._save(self._metadata, metadata_path)
+        if metadata_path is None: return
+        with lock(metadata_path.with_name(metadata_path.name + ".lock")):
+            metadata = self._load_metadata(metadata_path)
+            for url in self._dirty_metadata:
+                metadata[url] = self._metadata[url]
+            self._save(metadata, metadata_path)
+        self._metadata = metadata
+        self._dirty_metadata.clear()
+
+    def _load_metadata(self, path: Optional[Path]) -> Dict[str, Any]:
+        metadata = {}
+        for url, entry in self._load(path).items():
+            # Metadata from older versions may be keyed by unnormalized URLs.
+            metadata.setdefault(self.normalize(url), {}).update(entry)
+        return metadata
 
     def urls(self, active_only=True) -> List[str]:
         """
@@ -340,6 +362,7 @@ class Monoqueue:
         metadata = self.metadata(url)
         metadata["deferred_at"] = time.string(time.now())
         metadata["deferred_until"] = time.string(until)
+        self._dirty_metadata.add(self.normalize(url))
 
     def active(self, url: str) -> bool:
         """
@@ -391,9 +414,7 @@ class Monoqueue:
         log.debug("Saving %s...", path)
 
         if data is None or path is None: return
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+        write_json(data, path)
 
     def _score(self):
         log.debug("Scoring action items...")

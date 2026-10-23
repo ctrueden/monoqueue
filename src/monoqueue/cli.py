@@ -18,6 +18,7 @@ from pathlib import Path
 from pprint import pprint
 
 from . import Monoqueue, firefox, ui
+from .lock import lock
 from .log import log, setup_logging
 
 
@@ -114,16 +115,34 @@ def cmd_ui(*args):
     return 0
 
 
+DEFAULT_UP_WAIT = 600  # 10 minutes
+
+
 def cmd_up(*args):
+    args = list(args)
+    wait = DEFAULT_UP_WAIT
+    if "--wait" in args:
+        i = args.index("--wait")
+        wait = float(args[i + 1])
+        del args[i:i + 2]
+
     mq = Monoqueue()
 
     # TODO: Is this too hacky? Think about it.
     mq.progress = lambda more: print(".", flush=True, end="" if more else None)
 
-    mq.update(list(args) or None)
+    # Only one update at a time: e.g. a quick "mq up tabs" from cron
+    # could otherwise overlap a long full update.
+    lock_path = Monoqueue._DEFAULT_ITEMS_PATH.parent / "up.lock"
+    try:
+        with lock(lock_path, timeout=wait):
+            mq.update(args or None)
 
-    # Persist the updated action items to disk.
-    mq.save(metadata_path=None)
+            # Persist the updated action items to disk.
+            mq.save(metadata_path=None)
+    except TimeoutError:
+        log.error("Another update is still running after %g seconds; giving up.", wait)
+        return 75  # EX_TEMPFAIL
 
     return 0
 
@@ -139,7 +158,8 @@ Valid commands:
       ls - list action items by impact score
 snapshot - save open Firefox tabs, for "tabs" sources elsewhere
       ui - launch the interactive monoqueue user interface
-      up - update action item data from linked sources (all, or those given)
+      up - update action item data from linked sources (all, or those given);
+           waits up to 600 seconds for another update to finish (--wait N)
 """
 
     args = sys.argv[1:]
