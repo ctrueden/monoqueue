@@ -194,6 +194,39 @@ found by other sources, so as not to flood the queue. Put the
 If the portal's data is older than `max_age_days` (default 2), an item
 is added prompting you to fix the job that generates it.
 
+#### CalDAV tasks
+
+The caldav handler makes an action item of each open task (VTODO) on a
+CalDAV server, such as Nextcloud, Fastmail, iCloud or Radicale:
+
+```ini
+[nextcloud]
+handler = caldav
+url = https://cloud.example.org/remote.php/dav
+username = <your-username>
+password = <an-app-password>
+```
+
+Options:
+- `lists`: names of task lists to include, comma-separated (default: all).
+- `link`: a URL template for opening tasks in a web app, with `{calendar}`,
+  `{task}` and `{uid}` placeholders; by default, the task's CalDAV URL
+  is used. E.g., for Nextcloud Tasks:
+  `https://cloud.example.org/apps/tasks/#/calendars/{calendar}/tasks/{task}`
+- `verify`: `false` to skip TLS certificate verification, or the path of a
+  CA bundle or directory to trust, e.g. for a self-signed certificate.
+  Note that certificates must name their host in a subjectAltName.
+
+Completed and cancelled tasks are skipped. Rules can use `due` (and
+`seconds_until_due`, negative when overdue), plus `task/priority`
+(1 = highest, 9 = lowest, 0 = undefined), `task/list`, `task/categories`,
+and `task/links` (URLs from the task's URL field and description):
+
+```ini
+rule40 = seconds_until_due < 86400 -> +50: due within a day
+rule41 = task/priority == 1        -> +20: high priority task
+```
+
 #### GitHub
 
 The GitHub handler connects to GitHub using the specified personal access token,

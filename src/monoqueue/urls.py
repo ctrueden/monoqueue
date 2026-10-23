@@ -31,8 +31,9 @@ def normalize(url: str, discourse_hosts: Iterable[str] = DISCOURSE_HOSTS) -> str
     Normalize a URL, so that equivalent URLs compare equal.
 
     * Lowercase the scheme and host.
-    * Strip the #fragment and any tracking query parameters.
-    * Strip any trailing slash.
+    * Strip the #fragment and any tracking query parameters, except for
+      fragments starting with #/, which web apps use for routing.
+    * Strip any trailing slash (unless keeping a #/ fragment).
     * For Discourse topics, strip the slug, and the post number if it is 1:
       /t/my-topic/123 and /t/123/1 become /t/123, while /t/my-topic/123/4
       becomes /t/123/4. Other post numbers are kept, since separate posts
@@ -57,9 +58,11 @@ def normalize(url: str, discourse_hosts: Iterable[str] = DISCOURSE_HOSTS) -> str
     path = parts.path
     if host in discourse_hosts:
         path = _discourse_path(path)
-    if len(path) > 1: path = path.rstrip("/")
+    fragment = parts.fragment if parts.fragment.startswith("/") else ""
+    # NB: Web apps routing via fragments can be fussy about the path.
+    if len(path) > 1 and not fragment: path = path.rstrip("/")
 
-    return urlunsplit((scheme, host, path, query, ""))
+    return urlunsplit((scheme, host, path, query, fragment))
 
 
 def _discourse_path(path: str) -> str:

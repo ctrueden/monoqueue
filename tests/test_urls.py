@@ -24,6 +24,10 @@ class TestUrls(unittest.TestCase):
             normalize("https://Example.COM/page/?utm_source=mail&id=5&fbclid=xyz"),
         )
 
+    def test_route_fragment_kept(self):
+        url = "https://cloud.example.org/apps/tasks/#/calendars/work/tasks/a.ics"
+        self.assertEqual(url, normalize(url))
+
     def test_non_http(self):
         self.assertEqual("about:newtab", normalize("about:newtab"))
         self.assertEqual("mailto:a@b.c", normalize("mailto:a@b.c"))

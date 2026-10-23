@@ -19,12 +19,13 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List
 from urllib.parse import urlsplit
 
-from . import discourse, firefox, github, scijava
+from . import caldav, discourse, firefox, github, scijava
 from . import time, urls
 from .log import log
 from .parse import evaluate
 
 HANDLERS = {
+    "caldav": caldav.update,
     "discourse": discourse.update,
     "firefox": firefox.update,
     "github": github.update,
@@ -405,6 +406,8 @@ class Monoqueue:
             if "updated" in item:
                 updated_age = time.age(item["updated"])
                 item["seconds_since_update"] = updated_age.total_seconds()
+            if item.get("due"):
+                item["seconds_until_due"] = -time.age(item["due"]).total_seconds()
             accessed = [t["last_accessed"] for t in item.get("tabs", []) if t.get("last_accessed")]
             if accessed:
                 tab_age = time.age(max(accessed, key=time.str2dt))
