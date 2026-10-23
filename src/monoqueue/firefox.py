@@ -48,7 +48,14 @@ _PROFILE_PARENTS = [
 
 DEFAULT_SNAPSHOT_DIR = Path("~/.local/share/monoqueue/tabs").expanduser()
 DEFAULT_MAX_DEVICE_AGE_DAYS = 30
-DEFAULT_PULL_COMMAND = "ssh -o BatchMode=yes -o ConnectTimeout=5 {host} '~/.local/bin/mq snapshot -'"
+# NB: Non-interactive ssh sessions often lack ~/bin and ~/.local/bin
+# on the PATH, so look for mq there first.
+DEFAULT_PULL_COMMAND = (
+    "ssh -o BatchMode=yes -o ConnectTimeout=5 {host} "
+    "'for mq in ~/bin/mq ~/.local/bin/mq mq; do "
+    "command -v $mq >/dev/null && exec $mq snapshot -; done; "
+    "echo mq not found >&2; exit 127'"
+)
 
 
 def profile_files(name):

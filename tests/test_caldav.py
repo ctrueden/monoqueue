@@ -7,6 +7,7 @@
 # test_caldav.py
 # ------------------------------------------------------------------------
 
+import tempfile
 import unittest
 from unittest import mock
 
@@ -203,7 +204,10 @@ class TestCalDAV(unittest.TestCase):
     def test_verify(self):
         self.assertIs(False, caldav._verify("false"))
         self.assertIs(True, caldav._verify("true"))
-        self.assertEqual("/etc/ssl/certs", caldav._verify("/etc/ssl/certs"))
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(d, caldav._verify(d))
+        with self.assertRaisesRegex(ValueError, "verify must be"):
+            caldav._verify("false  # TEMP: inline comments are not comments")
 
 
 if __name__ == '__main__':

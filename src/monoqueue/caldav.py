@@ -23,6 +23,7 @@ Each open task becomes an action item, with fields for use in rules:
 import datetime
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from urllib.parse import urljoin
 
 import icalendar
@@ -160,7 +161,12 @@ def _timestamp(component, name):
 def _verify(value):
     if value.lower() in ("false", "no", "off", "0"): return False
     if value.lower() in ("true", "yes", "on", "1"): return True
-    return value  # Path to a CA bundle or directory.
+    if Path(value).expanduser().exists():
+        return str(Path(value).expanduser())  # A CA bundle or directory.
+    # NB: Config values cannot have inline comments, a common mistake.
+    raise ValueError(
+        f"verify must be true, false, or the path of a CA bundle or directory, not: {value!r}"
+    )
 
 
 class CalDAV:

@@ -163,7 +163,8 @@ enough to see the tabs of all of them.
 Options:
 - `pull`: hosts to pull snapshots from via ssh.
 - `pull_command`: the command to pull a snapshot, with `{host}` for the
-  host; default: `ssh -o BatchMode=yes -o ConnectTimeout=5 {host} '~/.local/bin/mq snapshot -'`.
+  host; by default, `mq snapshot -` via `ssh -o BatchMode=yes`, looking for
+  `mq` in `~/bin` and `~/.local/bin` before the PATH.
 - `exclude`: regular expressions, one per line, for URLs to ignore.
   Pinned tabs are always ignored.
 - `max_device_age_days`: skip devices not seen for this many days (default 30).
