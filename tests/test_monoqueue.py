@@ -12,8 +12,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from monoqueue import Monoqueue, time
+from monoqueue import HANDLERS, Monoqueue, time
 
 
 def _mq(**sections):
@@ -39,7 +40,7 @@ class TestMonoqueue(unittest.TestCase):
         self.assertEqual(a, b)
         self.assertEqual(1, len(mq.items))
         item = mq.item(a)
-        self.assertEqual("From GitHub", item["title"])
+        self.assertEqual("From a tab", item["title"])  # First title wins.
         self.assertEqual("2026-09-01T00:00:00.000Z", item["created"])
         self.assertEqual("2026-10-20T00:00:00Z", item["updated"])
         self.assertIn("tab", item)
@@ -81,6 +82,100 @@ class TestMonoqueue(unittest.TestCase):
         later = time.now() + datetime.timedelta(minutes=5)
         mq.put(url, {"updated": time.string(later)})
         self.assertTrue(mq.active(url))
+
+
+
+class TestUpdate(unittest.TestCase):
+    """
+    Tests for Monoqueue.update, with fake source handlers.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.fail_alpha = False
+        handlers = dict(HANDLERS, alpha=self._alpha, beta=self._beta, gamma=self._gamma)
+        patch = mock.patch.dict(HANDLERS, handlers)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def _alpha(self, mq, config):
+        if self.fail_alpha: raise RuntimeError("401 Bad credentials")
+        mq.put("https://example.com/a", {"title": "A"})
+
+    def _beta(self, mq, config):
+        mq.put("https://example.com/a#frag", {"title": "B's title for A", "beta": 1})
+        mq.put("https://example.com/b", {"title": "B"})
+
+    def _gamma(self, mq, config):
+        # Weak items only annotate items that other sources reported.
+        mq.put("https://example.com/b", {"gamma": True}, weak=True)
+        mq.put("https://example.com/c", {"title": "C", "gamma": True}, weak=True)
+
+    def _mq(self):
+        mq = Monoqueue({"rules": {}, "alpha": {}, "beta": {}, "gamma": {}})
+        mq.sources_dir = Path(self._tmp.name)
+        return mq
+
+    def test_merge(self):
+        mq = self._mq()
+        mq.update()
+        self.assertEqual({"https://example.com/a", "https://example.com/b"}, set(mq.items))
+        a = mq.item("https://example.com/a")
+        self.assertEqual("A", a["title"])
+        self.assertEqual(1, a["beta"])
+        self.assertEqual(["alpha", "beta"], a["sources"])
+        b = mq.item("https://example.com/b")
+        self.assertTrue(b["gamma"])
+        self.assertEqual(["beta", "gamma"], b["sources"])
+        self.assertNotIn("weak", b)
+
+    def test_failing_source_keeps_last_items(self):
+        self._mq().update()
+
+        self.fail_alpha = True
+        mq = self._mq()
+        mq.update()
+        alert_url = "monoqueue:source/alpha"
+        self.assertIn("https://example.com/a", mq.items)
+        self.assertEqual(["alpha", "beta"], mq.item("https://example.com/a")["sources"])
+
+        alert = mq.item(alert_url)
+        self.assertEqual("Fix monoqueue source: alpha", alert["title"])
+        self.assertIn("401 Bad credentials", alert["description"])
+        self.assertIn("Traceback", alert["description"])
+        self.assertEqual(alert_url, mq.urls()[0])
+
+        # Failing again keeps the original failure time.
+        since = alert["created"]
+        mq.update()
+        self.assertEqual(since, mq.item(alert_url)["created"])
+
+        # Once the source works again, the alert goes away.
+        self.fail_alpha = False
+        mq.update()
+        self.assertNotIn(alert_url, mq.items)
+
+    def test_failing_source_without_success(self):
+        self.fail_alpha = True
+        mq = self._mq()
+        mq.update()
+        self.assertEqual("B's title for A", mq.item("https://example.com/a")["title"])
+        self.assertIn("no items in the queue", mq.item("monoqueue:source/alpha")["description"])
+
+    def test_unknown_handler_is_a_failing_source(self):
+        mq = Monoqueue({"rules": {}, "bogus": {}})
+        mq.sources_dir = Path(self._tmp.name)
+        mq.update()
+        self.assertIn("Unsupported source type", mq.item("monoqueue:source/bogus")["description"])
+
+    def test_update_some_sources_merges_all(self):
+        self._mq().update()
+        self.fail_alpha = True
+        mq = self._mq()
+        mq.update(["beta"])  # alpha is not fetched, so does not fail.
+        self.assertEqual({"https://example.com/a", "https://example.com/b"}, set(mq.items))
+        self.assertNotIn("monoqueue:source/alpha", mq.items)
 
 
 if __name__ == '__main__':

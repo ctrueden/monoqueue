@@ -120,7 +120,7 @@ def cmd_up(*args):
     # TODO: Is this too hacky? Think about it.
     mq.progress = lambda more: print(".", flush=True, end="" if more else None)
 
-    mq.update()
+    mq.update(list(args) or None)
 
     # Persist the updated action items to disk.
     mq.save(metadata_path=None)
@@ -139,7 +139,7 @@ Valid commands:
       ls - list action items by impact score
 snapshot - save open Firefox tabs, for "tabs" sources elsewhere
       ui - launch the interactive monoqueue user interface
-      up - update action item data from linked sources
+      up - update action item data from linked sources (all, or those given)
 """
 
     args = sys.argv[1:]

@@ -66,7 +66,7 @@ class UI:
         updated = item.get("updated")
         impact = self.mq.impact(self.url)
         issue = item.get("issue")
-        body = UI.split_lines(issue.get("body"), 0) if issue else None
+        body = UI.split_lines(issue.get("body") if issue else item.get("description"), 0)
 
         row = -1
         self.write(self.url, (row := row + 1), c=C_URL)

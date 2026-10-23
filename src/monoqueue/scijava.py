@@ -68,11 +68,9 @@ def update(mq, config):
     for item_url, info in collect(rows[0]).items():
         # Roles not included only annotate items found by other sources,
         # so that e.g. 1000+ support issues do not flood the queue.
-        if not include & set(info["roles"]) and mq.normalize(item_url) not in mq.items:
-            continue
         data = {"scijava": info}
         if info.get("title"): data["title"] = info["title"]
-        mq.put(item_url, data)
+        mq.put(item_url, data, weak=not include & set(info["roles"]))
 
 
 def collect(row):
@@ -122,4 +120,5 @@ def _check_staleness(mq, generated, max_age_days):
         "created": time.string(time.str2dt(generated)),
         "updated": time.string(time.str2dt(generated)),
         "scijava": {"roles": ["stale_status"]},
+        "alert": True,
     })

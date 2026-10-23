@@ -170,8 +170,7 @@ def update_tabs(mq, config):
 
     for url, entry in tabs.items():
         data = {"tabs": entry["tabs"]}
-        # Prefer titles from richer sources, e.g. GitHub, over tab titles.
-        if url not in mq.items and entry["title"]: data["title"] = entry["title"]
+        if entry["title"]: data["title"] = entry["title"]
         mq.put(url, data)
 
 

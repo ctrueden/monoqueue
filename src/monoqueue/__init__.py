@@ -14,6 +14,7 @@ The monoqueue data structure with core business logic.
 import configparser
 import datetime
 import json
+import traceback
 from pathlib import Path
 from typing import Any, Dict, Optional, List
 from urllib.parse import urlsplit
@@ -32,6 +33,52 @@ HANDLERS = {
 }
 
 
+def merge_item(item: Dict[str, Any], data: Dict[str, Any]) -> None:
+    """
+    Merge data about an action item into the item.
+
+    The earliest created timestamp, the latest updated timestamp, and the
+    first title win; other fields from data replace those of the item.
+    """
+    data = dict(data)
+    for key, pick in (("created", min), ("updated", max)):
+        if item.get(key) and data.get(key):
+            data[key] = pick(item[key], data[key], key=time.str2dt)
+    if item.get("title"): data.pop("title", None)
+    item.update(data)
+
+
+class Source:
+    """
+    Collects the action items of one source during an update.
+
+    Source handlers receive one of these, and call its put method to
+    report action items, just like Monoqueue.put. When the handler
+    succeeds, the items are saved to the source's own file, which is then
+    merged with the other sources' files into the queue. When it fails,
+    that source's file from its last success remains in use.
+    """
+
+    def __init__(self, mq: "Monoqueue", name: str):
+        self.mq = mq
+        self.name = name
+        self.items: Dict[str, Dict[str, Any]] = {}
+        self.progress = mq.progress
+
+    def normalize(self, url: str) -> str:
+        return self.mq.normalize(url)
+
+    def put(self, url: str, data: Dict[str, Any], weak: bool = False) -> str:
+        """
+        Report information about an action item; see Monoqueue.put.
+        """
+        url = self.normalize(url)
+        item = self.items.setdefault(url, {"weak": True} if weak else {})
+        if not weak: item.pop("weak", None)
+        merge_item(item, data)
+        return url
+
+
 class ImpactScore:
     def __init__(self, value, rules):
         self.value = value
@@ -42,6 +89,7 @@ class Monoqueue:
     _DEFAULT_CONFIG_PATH = Path("~/.config/monoqueue.conf").expanduser()
     _DEFAULT_ITEMS_PATH = Path("~/.local/share/monoqueue/items.json").expanduser()
     _DEFAULT_METADATA_PATH = Path("~/.local/share/monoqueue/metadata.json").expanduser()
+    _DEFAULT_SOURCES_DIR = Path("~/.local/share/monoqueue/sources").expanduser()
 
     def __init__(self, config: Dict = None):
         if config is None:
@@ -52,6 +100,7 @@ class Monoqueue:
         self._impact = {}
         self._metadata = {}
         self.progress = None
+        self.sources_dir = Monoqueue._DEFAULT_SOURCES_DIR
 
         # load rules from config
         self.rules = []
@@ -92,7 +141,8 @@ class Monoqueue:
 
     def urls(self, active_only=True) -> List[str]:
         """
-        Get the list of action item URLs, ordered by impact score.
+        Get the list of action item URLs, ordered by impact score,
+        except that alerts (e.g. failing sources) always come first.
         """
         urls = []
         urls.extend(
@@ -100,35 +150,124 @@ class Monoqueue:
             if active_only
             else self.items
         )
-        urls.sort(key=lambda url: self.impact(url).value, reverse=True)
+        urls.sort(
+            key=lambda url: (bool(self.items[url].get("alert")), self.impact(url).value),
+            reverse=True,
+        )
         return urls
 
-    def update(self) -> None:
+    def sources(self) -> List[str]:
+        """
+        Get the names of the configured sources, in configuration order.
+        """
+        return [
+            section for section in self.config
+            if section not in ("DEFAULT", "rules", "scoring")
+        ]
+
+    def update(self, sources: Optional[List[str]] = None) -> None:
         """
         Update the queue from its sources.
 
-        :raise RuntimeError: If something goes wrong.
+        Each source is fetched separately, and its items saved to its own
+        file beneath sources_dir. A source that fails keeps the items
+        from its last success, and gets an alert item describing the
+        failure. Then the items of all sources are merged into the queue.
+
+        :param sources:
+            Names of the sources to fetch, or None to fetch all of them.
+            Either way, the items of all sources are merged.
         """
+        for section in self.sources():
+            if sources and section not in sources: continue
+            self._update_source(section, self.config[section])
 
-        for section, config in self.config.items():
-            if section in ("DEFAULT", "rules", "scoring"): continue
-
-            config["source"] = section
-            handler = config.get("handler", section)
-
-            log.info("Updating %s...", section)
-
-            if handler not in HANDLERS:
-                raise f"Unsupported source type: {handler}"
-
-            # Execute the handler's update function.
-            update = HANDLERS[handler]
-            if update is not None: update(self, config)
-
-            log.debug("Action item count -> %d", len(self.items))
-
-        # Recalculate item scores.
+        self.items = self._merge_sources()
         self._score()
+
+    def _update_source(self, section: str, config) -> None:
+        config["source"] = section
+        handler = config.get("handler", section)
+        log.info("Updating %s...", section)
+
+        status_path = self.sources_dir / f"{section}.status.json"
+        status = self._load(status_path)
+        now = time.string(int(time.now().timestamp()))
+        try:
+            if handler not in HANDLERS:
+                raise ValueError(f"Unsupported source type: {handler}")
+            source = Source(self, section)
+            HANDLERS[handler](source, config)
+        except Exception as e:
+            log.error("Source %s failed: %s", section, e)
+            if status.get("ok", True): status["failing_since"] = now
+            status.update({
+                "ok": False,
+                "last_attempt": now,
+                "error": f"{type(e).__name__}: {e}",
+                "traceback": traceback.format_exc(),
+            })
+        else:
+            log.debug("Source %s -> %d items", section, len(source.items))
+            self._save(
+                {"source": section, "fetched": now, "items": source.items},
+                self.sources_dir / f"{section}.json",
+            )
+            status = {"ok": True, "last_attempt": now, "last_success": now}
+        self._save(status, status_path)
+
+    def _merge_sources(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Merge the saved items of all configured sources, in configuration
+        order. Weak items (which only annotate) are merged last, and only
+        into items that some other source reported.
+        """
+        items = {}
+        weak = []
+        for name in self.sources():
+            data = self._load(self.sources_dir / f"{name}.json")
+            for url, item in data.get("items", {}).items():
+                url = self.normalize(url)
+                if item.get("weak"):
+                    weak.append((name, url, item))
+                    continue
+                merged = items.setdefault(url, {})
+                merge_item(merged, item)
+                merged.setdefault("sources", []).append(name)
+
+            status = self._load(self.sources_dir / f"{name}.status.json")
+            if status and not status.get("ok", True):
+                items[f"monoqueue:source/{name}"] = self._failure_item(name, status)
+
+        for name, url, item in weak:
+            if url not in items: continue
+            merge_item(items[url], {k: v for k, v in item.items() if k != "weak"})
+            items[url]["sources"].append(name)
+
+        return items
+
+    @staticmethod
+    def _failure_item(name: str, status: Dict[str, Any]) -> Dict[str, Any]:
+        last_success = status.get("last_success")
+        return {
+            "title": f"Fix monoqueue source: {name}",
+            "description": (
+                f"{status.get('error')}\n\n"
+                f"Failing since {status.get('failing_since')}; "
+                f"last attempt {status.get('last_attempt')}; "
+                f"last success {last_success or 'never'}.\n"
+                + (
+                    "Until it is fixed, the queue uses this source's items from its last success."
+                    if last_success else
+                    "This source has no items in the queue until it succeeds."
+                )
+                + f"\n\n{status.get('traceback', '')}"
+            ),
+            "created": status.get("failing_since"),
+            "updated": status.get("failing_since"),
+            "alert": True,
+            "sources": ["monoqueue"],
+        }
 
     def normalize(self, url: str) -> str:
         """
@@ -137,30 +276,28 @@ class Monoqueue:
         """
         return urls.normalize(url, self.discourse_hosts)
 
-    def put(self, url: str, data: Dict[str, Any]) -> str:
+    def put(self, url: str, data: Dict[str, Any], weak: bool = False) -> str:
         """
         Merge data from a source into the action item for the given URL.
 
         The URL is normalized first, so that equivalent URLs from different
         sources (e.g. a browser tab and a GitHub issue) become one item.
-        When the item already exists, the earliest created timestamp
-        and the latest updated timestamp win.
+        When the item already exists, the earliest created timestamp,
+        the latest updated timestamp, and the first title win.
 
         :param url:
             The URL of the action item.
         :param data:
             Information about the action item, such as title, created and
             updated timestamps, and source-specific details.
+        :param weak:
+            If True, only annotate an existing item; never create one.
         :return:
             The normalized URL.
         """
         url = self.normalize(url)
-        item = self.items.setdefault(url, {})
-        data = dict(data)
-        for key, pick in (("created", min), ("updated", max)):
-            if item.get(key) and data.get(key):
-                data[key] = pick(item[key], data[key], key=time.str2dt)
-        item.update(data)
+        if weak and url not in self.items: return url
+        merge_item(self.items.setdefault(url, {}), data)
         return url
 
     def item(self, url: str) -> Optional[Dict[str, Any]]:

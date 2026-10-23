@@ -236,11 +236,29 @@ How to make a Discourse API key:
 Command          | Description
 -----------------|------------
 `mq up`          | Fetch items from configured sources (Firefox, GitHub, Discourse, etc.).
+`mq up <source>` | Fetch items from only the given sources (e.g. `mq up tabs`).
 `mq ui`          | Launch the interactive user interface.
 `mq ls`          | List action items in plaintext.
 `mq ls --html`   | List action items as an HTML report.
 `mq snapshot`    | Save open Firefox tabs, for `tabs` sources elsewhere.
 `mq info <url>`  | Show detailed info about an action item.
+
+### Sources and failures
+
+Each source's items are saved separately, beneath
+`~/.local/share/monoqueue/sources/`, and then merged into the queue in
+configuration order: for an item reported by several sources, the title
+from the first one wins. Merged items list their `sources`, for use in
+rules such as `"tabs" in sources -> +5: open in a browser tab`.
+
+If a source fails (e.g. an expired token), the queue keeps using its
+items from its last success, and an alert item titled *Fix monoqueue
+source: &lt;name&gt;* appears at the top of the queue, with the error
+details in its description. It disappears once the source works again.
+
+Since `mq up <source>` still merges the saved items of all sources,
+sources can be refreshed on different schedules: e.g., tabs every 15
+minutes, and everything else hourly.
 
 ## Limitations and pitfalls
 
