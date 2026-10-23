@@ -11,7 +11,9 @@
 A curses-based user interface to monoqueue.
 """
 
+import base64
 import curses
+import os
 import re
 import sys
 import webbrowser
@@ -53,10 +55,32 @@ class UI:
         self.index = None
         self.count = None
         self.scroll_offset = None
+        self.message = None
+        self.link = None
         self.jump(0)
 
     def refresh(self):
         self.stdscr.refresh()
+        self.draw_link()
+
+    def draw_link(self):
+        """
+        Make the URL a hyperlink (OSC 8) to the full URL, so that clicking it
+        works even when it is shown truncated.
+
+        curses cannot emit hyperlinks, so this rewrites the URL's text
+        directly to the terminal, behind curses's back. The rewritten text is
+        identical, so curses's idea of the screen remains accurate.
+        """
+        if not self.link: return
+        y, x, text = self.link
+        sys.stdout.write(
+            "\0337"  # Save cursor position and attributes.
+            f"\033[{y + 1};{x + 1}H\033[36;40m"
+            f"\033]8;;{self.url}\033\\{text}\033]8;;\033\\"
+            "\0338"  # Restore them.
+        )
+        sys.stdout.flush()
 
     def draw_screen(self):
         self.stdscr.clear()
@@ -70,6 +94,8 @@ class UI:
 
         row = -1
         self.write(self.url, (row := row + 1), c=C_URL)
+        text = UI.trunc_line(self.url, curses.COLS)
+        self.link = (row, (curses.COLS - len(text)) // 2, text)
         self.write(item["title"], (row := row + 1), c=C_TITLE)
 
         self.draw_divider(row := row + 1)
@@ -104,6 +130,10 @@ class UI:
             for i in range(self.scroll_offset, len(body)):
                 self.write(body[i], (row := row + 1), 0)
                 if row >= curses.LINES: break
+
+        if self.message:
+            self.write(self.message, prompt_row, 4, c=C_HILITE)
+            self.message = None
 
         # Cursor prompt
         self.write("> ", prompt_row, 0)
@@ -192,7 +222,7 @@ class UI:
 
     def do_operation(self, key: str):
         code = tuple(ord(c) for c in key)
-        if key in "oO": webbrowser.open(self.url)
+        if key in "oO": self.open()
         elif key in "nN": self.jump(self.index + 1)
         elif key in "pP": self.jump(self.index - 1)
         elif key in "qQ": self.quit()
@@ -205,6 +235,20 @@ class UI:
         elif key == "G" or code == K_END: self.scroll(2**30)
         return True
 
+    def open(self):
+        """
+        Open the URL in a browser, if there is a display to show one; or else,
+        e.g. when connected via ssh, copy the URL to the clipboard of the
+        terminal you are using (OSC 52), rather than open a console browser.
+        """
+        if _has_display():
+            webbrowser.open(self.url)
+            return
+        data = base64.b64encode(self.url.encode()).decode()
+        sys.stdout.write(f"\033]52;c;{data}\a")
+        sys.stdout.flush()
+        self.message = "Copied URL to clipboard"
+
     def loop(self):
         curses.init_pair(C_OPTION, curses.COLOR_RED, curses.COLOR_BLACK)
         curses.init_pair(C_HILITE, curses.COLOR_YELLOW, curses.COLOR_BLACK)
@@ -215,6 +259,7 @@ class UI:
 
         while True:
             self.draw_screen()
+            self.refresh()
             key = self.readkey()
             self.do_operation(key)
 
@@ -238,6 +283,11 @@ class UI:
     def scroll(self, amount):
         self.scroll_offset += amount
         if self.scroll_offset < 0: self.scroll_offset = 0
+
+def _has_display():
+    if sys.platform in ("darwin", "win32"): return True
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
 
 def main(*args):
     curses.wrapper(lambda stdscr: UI(stdscr).loop())

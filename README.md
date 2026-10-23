@@ -287,6 +287,16 @@ Command          | Description
 `mq snapshot`    | Save open Firefox tabs, for `tabs` sources elsewhere.
 `mq info <url>`  | Show detailed info about an action item.
 
+### Over ssh
+
+When `mq ui` runs without a display, e.g. on a server you ssh into,
+`(O)pen` copies the URL to the clipboard of the terminal you are using,
+via OSC 52, rather than launching a console browser. The URL at the top
+is also a terminal hyperlink (OSC 8) to the full URL, even when shown
+abbreviated, so your terminal can open it with a click. Inside tmux,
+both need `set -g set-clipboard on` and
+`set -as terminal-features ',*:clipboard,*:hyperlinks'`.
+
 ### Status bars
 
 After each update or deferral, monoqueue writes a one-line summary to
