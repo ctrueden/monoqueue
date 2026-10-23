@@ -28,6 +28,7 @@ HANDLERS = {
     "firefox": firefox.update,
     "github": github.update,
     "scijava": scijava.update,
+    "tabs": firefox.update_tabs,
 }
 
 
@@ -267,6 +268,10 @@ class Monoqueue:
             if "updated" in item:
                 updated_age = time.age(item["updated"])
                 item["seconds_since_update"] = updated_age.total_seconds()
+            accessed = [t["last_accessed"] for t in item.get("tabs", []) if t.get("last_accessed")]
+            if accessed:
+                tab_age = time.age(max(accessed, key=time.str2dt))
+                item["seconds_since_tab_access"] = tab_age.total_seconds()
 
         # Initially, each rule has not applied to any action items.
         unused_rules = set(consequence for _, consequence in self.rules)

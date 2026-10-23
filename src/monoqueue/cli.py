@@ -11,10 +11,13 @@
 The monoqueue command line tool.
 """
 
+import json
+import os
 import sys
+from pathlib import Path
 from pprint import pprint
 
-from . import Monoqueue, ui
+from . import Monoqueue, firefox, ui
 from .log import log, setup_logging
 
 
@@ -84,6 +87,28 @@ def cmd_ls(*args):
     return 0
 
 
+def cmd_snapshot(*args):
+    snap = firefox.snapshot()
+    text = json.dumps(snap, indent=2)
+
+    if args and args[0] == "-":
+        print(text)
+        return 0
+
+    path = (
+        Path(args[0]) if args
+        else firefox.DEFAULT_SNAPSHOT_DIR / f"{snap['host']}.json"
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+    count = sum(len(device["tabs"]) for device in snap["devices"].values())
+    log.info("Wrote %d tabs from %d devices to %s", count, len(snap["devices"]), path)
+    return 0
+
+
 def cmd_ui(*args):
     ui.main(*args)
     return 0
@@ -110,10 +135,11 @@ def main():
 Usage: mq <command> [<args>]
 
 Valid commands:
-  info - show detailed info about action items
-    ls - list action items by impact score
-    ui - launch the interactive monoqueue user interface
-    up - update action item data from linked sources
+    info - show detailed info about action items
+      ls - list action items by impact score
+snapshot - save open Firefox tabs, for "tabs" sources elsewhere
+      ui - launch the interactive monoqueue user interface
+      up - update action item data from linked sources
 """
 
     args = sys.argv[1:]
@@ -126,6 +152,7 @@ Valid commands:
 
     if command == "info": return cmd_info(*args)
     if command == "ls": return cmd_ls(*args)
+    if command == "snapshot": return cmd_snapshot(*args)
     if command == "ui": return cmd_ui(*args)
     if command == "up": return cmd_up(*args)
 

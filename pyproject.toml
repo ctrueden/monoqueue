@@ -26,6 +26,7 @@ classifiers = [
 
 requires-python = ">=3.9"
 dependencies = [
+    "lz4",
     "requests",
 ]
 
