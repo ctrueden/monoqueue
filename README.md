@@ -228,6 +228,16 @@ rule40 = seconds_until_due < 86400 -> +50: due within a day
 rule41 = task/priority == 1        -> +20: high priority task
 ```
 
+#### GitHub notifications
+
+The notifications handler makes an action item of each unread GitHub
+notification aimed at you personally: by default mentions, team
+mentions, review requests and assignments, but not mere activity on
+repositories you watch. Set `reasons` to a comma-separated list of
+[notification reasons](https://docs.github.com/en/rest/activity/notifications#about-notification-reasons)
+to change this. Like the GitHub handler, it uses a configured `token`,
+or else that of the GitHub CLI. Rules can use `notification/reason`.
+
 #### GitHub
 
 The GitHub handler connects to GitHub using the specified personal access token,
@@ -276,6 +286,19 @@ Command          | Description
 `mq ls --html`   | List action items as an HTML report.
 `mq snapshot`    | Save open Firefox tabs, for `tabs` sources elsewhere.
 `mq info <url>`  | Show detailed info about an action item.
+
+### Status bars
+
+After each update or deferral, monoqueue writes a one-line summary to
+`~/.local/share/monoqueue/status`, for status bars such as byobu's:
+
+```
+<alerts> <due> <active> <written>
+```
+
+That is: the numbers of active alerts (e.g. failing sources), of active
+items due within a day or overdue, and of all active items; and when
+the summary was written, in seconds since the epoch.
 
 ### Sources and failures
 

@@ -230,6 +230,7 @@ class UI:
 
         # Persist the updated metadata to disk.
         self.mq.save(items_path=None)
+        self.mq.save_status()
 
         # Refresh the display.
         self.jump(self.index)

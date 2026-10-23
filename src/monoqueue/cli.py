@@ -140,6 +140,10 @@ def cmd_up(*args):
 
             # Persist the updated action items to disk.
             mq.save(metadata_path=None)
+
+            # Summarize, taking deferrals into account.
+            mq.load(items_path=None)
+            mq.save_status()
     except TimeoutError:
         log.error("Another update is still running after %g seconds; giving up.", wait)
         return 75  # EX_TEMPFAIL

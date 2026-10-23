@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List
 from urllib.parse import urlsplit
 
-from . import caldav, discourse, firefox, github, scijava
+from . import caldav, discourse, firefox, github, notifications, scijava
 from . import time, urls
 from .lock import lock, write_json
 from .log import log
@@ -30,6 +30,7 @@ HANDLERS = {
     "discourse": discourse.update,
     "firefox": firefox.update,
     "github": github.update,
+    "notifications": notifications.update,
     "scijava": scijava.update,
     "tabs": firefox.update_tabs,
 }
@@ -92,6 +93,7 @@ class Monoqueue:
     _DEFAULT_ITEMS_PATH = Path("~/.local/share/monoqueue/items.json").expanduser()
     _DEFAULT_METADATA_PATH = Path("~/.local/share/monoqueue/metadata.json").expanduser()
     _DEFAULT_SOURCES_DIR = Path("~/.local/share/monoqueue/sources").expanduser()
+    _DEFAULT_STATUS_PATH = Path("~/.local/share/monoqueue/status").expanduser()
 
     def __init__(self, config: Dict = None):
         if config is None:
@@ -128,7 +130,7 @@ class Monoqueue:
         items_path: Path = _DEFAULT_ITEMS_PATH,
         metadata_path: Path = _DEFAULT_METADATA_PATH
     ) -> None:
-        self.items = self._load(items_path)
+        if items_path is not None: self.items = self._load(items_path)
         self._metadata = self._load_metadata(metadata_path)
         self._dirty_metadata.clear()
         if self.items: self._score()
@@ -154,6 +156,36 @@ class Monoqueue:
             self._save(metadata, metadata_path)
         self._metadata = metadata
         self._dirty_metadata.clear()
+
+    def summary(self) -> Dict[str, int]:
+        """
+        Summarize the queue: the number of active alerts (e.g. failing
+        sources), active items due within a day or overdue, and all
+        active items.
+        """
+        urls = self.urls()
+        return {
+            "alerts": sum(1 for url in urls if self.items[url].get("alert")),
+            "due": sum(1 for url in urls if self.items[url].get("seconds_until_due", float("inf")) < 86400),
+            "active": len(urls),
+        }
+
+    def save_status(self, path: Optional[Path] = _DEFAULT_STATUS_PATH) -> None:
+        """
+        Write the queue's summary to a one-line status file, for display
+        by status bars (e.g. byobu) without the cost of loading the queue:
+
+            <alerts> <due> <active> <written>
+
+        where <written> is when the summary was written, in seconds since
+        the epoch, so readers can tell when updates have stopped running.
+        """
+        if path is None: return
+        s = self.summary()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.tmp")
+        tmp.write_text(f"{s['alerts']} {s['due']} {s['active']} {int(time.now().timestamp())}\n")
+        tmp.replace(path)
 
     def _load_metadata(self, path: Optional[Path]) -> Dict[str, Any]:
         metadata = {}
