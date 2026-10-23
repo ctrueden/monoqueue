@@ -212,7 +212,7 @@ Options:
 - `link`: a URL template for opening tasks in a web app, with `{calendar}`,
   `{task}` and `{uid}` placeholders; by default, the task's CalDAV URL
   is used. E.g., for Nextcloud Tasks:
-  `https://cloud.example.org/apps/tasks/#/calendars/{calendar}/tasks/{task}`
+  `https://cloud.example.org/apps/tasks/calendars/{calendar}/tasks/{task}`
 - `verify`: `false` to skip TLS certificate verification, or the path of a
   CA bundle or directory to trust, e.g. for a self-signed certificate.
   Note that certificates must name their host in a subjectAltName.

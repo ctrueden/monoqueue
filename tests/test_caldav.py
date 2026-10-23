@@ -192,10 +192,10 @@ class TestCalDAV(unittest.TestCase):
         mq = Monoqueue({"rules": {}})
         caldav.update(mq, {
             "url": BASE,
-            "link": "https://cloud.example.org/apps/tasks/#/calendars/{calendar}/tasks/{task}",
+            "link": "https://cloud.example.org/apps/tasks/calendars/{calendar}/tasks/{task}",
         })
         self.assertIn(
-            "https://cloud.example.org/apps/tasks/#/calendars/work/tasks/review.ics",
+            "https://cloud.example.org/apps/tasks/calendars/work/tasks/review.ics",
             mq.items,
         )
         self.assertEqual(2, len(mq.items))
