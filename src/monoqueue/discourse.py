@@ -42,11 +42,7 @@ def update(mq, config):
     search.download(query)
 
     for topic in search.topics:
-        url = f"{baseurl}/t/{topic['id']}"
-        if url not in mq.items:
-            mq.items[url] = {}
-
-        mq.items[url].update({
+        mq.put(f"{baseurl}/t/{topic['id']}", {
             "title": topic["title"],
             "created": topic["created_at"],
             "updated": topic["last_posted_at"],

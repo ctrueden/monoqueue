@@ -38,8 +38,7 @@ def update(mq, config):
     if mq.progress:
         mq.progress(None)
     for issue in items:
-        url = issue["html_url"]
-        mq.items.setdefault(url, {}).update({
+        mq.put(issue["html_url"], {
             "title": issue["title"],
             "created": issue["created_at"],
             "updated": issue["updated_at"],

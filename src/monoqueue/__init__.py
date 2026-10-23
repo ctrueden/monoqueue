@@ -16,9 +16,10 @@ import datetime
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional, List
+from urllib.parse import urlsplit
 
 from . import discourse, firefox, github
-from . import time
+from . import time, urls
 from .log import log
 from .parse import evaluate
 
@@ -62,12 +63,22 @@ class Monoqueue:
             self.rules.append((expression, consequence))
         log.debug("Parsed %d rules", len(self.rules))
 
+        # Discourse forums need special URL normalization.
+        self.discourse_hosts = set(urls.DISCOURSE_HOSTS)
+        for section, section_config in config.items():
+            if section_config.get("handler") == "discourse":
+                baseurl = section_config.get("baseurl", f"https://{section}")
+                self.discourse_hosts.add(urlsplit(baseurl).netloc.lower())
+
     def load(self,
         items_path: Path = _DEFAULT_ITEMS_PATH,
         metadata_path: Path = _DEFAULT_METADATA_PATH
     ) -> None:
         self.items = self._load(items_path)
-        self._metadata = self._load(metadata_path)
+        self._metadata = {}
+        for url, metadata in self._load(metadata_path).items():
+            # Metadata from older versions may be keyed by unnormalized URLs.
+            self.metadata(url).update(metadata)
         if self.items: self._score()
 
     def save(self,
@@ -117,6 +128,39 @@ class Monoqueue:
         # Recalculate item scores.
         self._score()
 
+    def normalize(self, url: str) -> str:
+        """
+        Normalize the given URL, so that equivalent URLs compare equal.
+        See monoqueue.urls.normalize for details.
+        """
+        return urls.normalize(url, self.discourse_hosts)
+
+    def put(self, url: str, data: Dict[str, Any]) -> str:
+        """
+        Merge data from a source into the action item for the given URL.
+
+        The URL is normalized first, so that equivalent URLs from different
+        sources (e.g. a browser tab and a GitHub issue) become one item.
+        When the item already exists, the earliest created timestamp
+        and the latest updated timestamp win.
+
+        :param url:
+            The URL of the action item.
+        :param data:
+            Information about the action item, such as title, created and
+            updated timestamps, and source-specific details.
+        :return:
+            The normalized URL.
+        """
+        url = self.normalize(url)
+        item = self.items.setdefault(url, {})
+        data = dict(data)
+        for key, pick in (("created", min), ("updated", max)):
+            if item.get(key) and data.get(key):
+                data[key] = pick(item[key], data[key], key=time.str2dt)
+        item.update(data)
+        return url
+
     def item(self, url: str) -> Optional[Dict[str, Any]]:
         """
         Get action item data for the given URL.
@@ -143,9 +187,7 @@ class Monoqueue:
         :return:
             Metadata relating to the action item.
         """
-        if url not in self._metadata:
-            self._metadata[url] = {}
-        return self._metadata[url]
+        return self._metadata.setdefault(self.normalize(url), {})
 
     def defer(self, url: str, until: datetime.datetime) -> None:
         """
@@ -174,7 +216,7 @@ class Monoqueue:
         if metadata is None or "deferred_until" not in metadata: return True
 
         item = self.item(url)
-        if "deferred_at" in metadata and "updated" in metadata:
+        if "deferred_at" in metadata and "updated" in item:
             # Check whether item has changed since deferral occurred.
             deferred_at = time.str2dt(metadata["deferred_at"])
             updated = time.str2dt(item["updated"])

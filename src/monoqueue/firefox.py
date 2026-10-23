@@ -24,11 +24,7 @@ from .log import log
 
 def update(mq, config):
     for bookmark in bookmarks(config["folder"]):
-        url = bookmark["url"]
-        if url not in mq.items:
-            mq.items[url] = {}
-
-        mq.items[url].update({
+        mq.put(bookmark["url"], {
             "title": bookmark["title"],
             "created": bookmark["dateAdded"],
             "updated": bookmark["lastModified"],
