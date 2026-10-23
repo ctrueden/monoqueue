@@ -16,6 +16,7 @@ import datetime
 import json
 import traceback
 from pathlib import Path
+import re
 from typing import Any, Dict, Optional, List
 from urllib.parse import urlsplit
 
@@ -34,6 +35,28 @@ HANDLERS = {
     "scijava": scijava.update,
     "tabs": firefox.update_tabs,
 }
+
+
+# A comment ending a config line: a # with whitespace on both sides, so that
+# values such as "#tag" and "https://example.com/#/route" are left intact.
+_EOL_COMMENT = re.compile("\\s+#(\\s.*)?$")
+
+
+def read_config(path: Path) -> configparser.ConfigParser:
+    """
+    Read a config file, stripping comments that end a line.
+
+    NB: configparser's own inline_comment_prefixes is not used, since it
+    would also strip values beginning with #, and would treat ; as a
+    comment, which rules may use.
+    """
+    config = configparser.ConfigParser()
+    config.read(path)
+    for section in config.sections():
+        for key, value in config.items(section, raw=True):
+            stripped = _EOL_COMMENT.sub("", value)
+            if stripped != value: config.set(section, key, stripped)
+    return config
 
 
 def merge_item(item: Dict[str, Any], data: Dict[str, Any]) -> None:
@@ -97,8 +120,7 @@ class Monoqueue:
 
     def __init__(self, config: Dict = None):
         if config is None:
-            config = configparser.ConfigParser()
-            config.read(Monoqueue._DEFAULT_CONFIG_PATH)
+            config = read_config(Monoqueue._DEFAULT_CONFIG_PATH)
         self.config = config
         self.items = {}
         self._impact = {}

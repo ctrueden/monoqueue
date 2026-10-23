@@ -163,7 +163,6 @@ def _verify(value):
     if value.lower() in ("true", "yes", "on", "1"): return True
     if Path(value).expanduser().exists():
         return str(Path(value).expanduser())  # A CA bundle or directory.
-    # NB: Config values cannot have inline comments, a common mistake.
     raise ValueError(
         f"verify must be true, false, or the path of a CA bundle or directory, not: {value!r}"
     )

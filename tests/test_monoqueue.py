@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from monoqueue import HANDLERS, Monoqueue, time
+from monoqueue import HANDLERS, Monoqueue, read_config, time
 
 
 def _mq(**sections):
@@ -83,6 +83,29 @@ class TestMonoqueue(unittest.TestCase):
         mq.put(url, {"updated": time.string(later)})
         self.assertTrue(mq.active(url))
 
+
+
+class TestReadConfig(unittest.TestCase):
+
+    def test_strips_end_of_line_comments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "monoqueue.conf"
+            path.write_text(
+                "[source]\n"
+                "verify = false  # TEMP: until the cert is fixed\n"
+                "empty = #\n"
+                "query = #development tags:imagej status:open\n"
+                "link = https://example.com/#/tasks/{uid}\n"
+                "rule = a ; b -> +1: x#y\n"
+                "pct = 100%%\n"
+            )
+            config = read_config(path)
+        self.assertEqual("false", config["source"]["verify"])
+        self.assertEqual("#", config["source"]["empty"])
+        self.assertEqual("#development tags:imagej status:open", config["source"]["query"])
+        self.assertEqual("https://example.com/#/tasks/{uid}", config["source"]["link"])
+        self.assertEqual("a ; b -> +1: x#y", config["source"]["rule"])
+        self.assertEqual("100%", config["source"]["pct"])
 
 
 class TestUpdate(unittest.TestCase):
