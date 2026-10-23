@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List
 from urllib.parse import urlsplit
 
-from . import discourse, firefox, github
+from . import discourse, firefox, github, scijava
 from . import time, urls
 from .log import log
 from .parse import evaluate
@@ -27,6 +27,7 @@ HANDLERS = {
     "discourse": discourse.update,
     "firefox": firefox.update,
     "github": github.update,
+    "scijava": scijava.update,
 }
 
 

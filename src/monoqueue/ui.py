@@ -62,8 +62,8 @@ class UI:
         self.stdscr.clear()
 
         item = self.mq.item(self.url)
-        created = item["created"]
-        updated = item["updated"]
+        created = item.get("created")
+        updated = item.get("updated")
         impact = self.mq.impact(self.url)
         issue = item.get("issue")
         body = UI.split_lines(issue.get("body"), 0) if issue else None
@@ -82,9 +82,10 @@ class UI:
         # Left column
         l_row = row
         l_col = 2
-        self.write(f"Created: {created}", (l_row := l_row + 1), l_col, c=C_DATES)
-        self.write(f"Updated: {updated}", (l_row := l_row + 1), l_col, c=C_DATES)
-        self.write(f"Age: {time.age(updated)}", (l_row := l_row + 1), l_col, c=C_DATES)
+        self.write(f"Created: {created or '?'}", (l_row := l_row + 1), l_col, c=C_DATES)
+        self.write(f"Updated: {updated or '?'}", (l_row := l_row + 1), l_col, c=C_DATES)
+        if updated:
+            self.write(f"Age: {time.age(updated)}", (l_row := l_row + 1), l_col, c=C_DATES)
 
         # Right column
         r_row = row
