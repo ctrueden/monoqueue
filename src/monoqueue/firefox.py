@@ -40,6 +40,8 @@ def update(mq, config):
 
 
 _PROFILE_PARENTS = [
+    # NB: Newer Firefox versions on Linux follow the XDG spec.
+    str(Path(os.environ.get("XDG_CONFIG_HOME") or "~/.config") / "mozilla" / "firefox"),
     "~/.mozilla/firefox",
     "~/.mozilla/firefox-esr",
     "~/snap/firefox/common/.mozilla/firefox",
