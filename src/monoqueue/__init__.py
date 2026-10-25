@@ -527,8 +527,9 @@ class Monoqueue:
                 if smv == "X":
                     # Score mod value is the rule evaluation result.
                     smv = float(applies)
-                    # Replace X with the actual number.
-                    consequence = f"{op}{applies}{consequence[2:]}"
+                    # Replace X with the actual number, legibly rounded.
+                    shown = f"{smv:.1f}".removesuffix(".0")
+                    consequence = f"{op}{shown}{consequence[2:]}"
                 else:
                     # Score mod value is a constant declared in the consequence.
                     smv = float(smv)

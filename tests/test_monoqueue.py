@@ -46,6 +46,19 @@ class TestMonoqueue(unittest.TestCase):
         self.assertIn("tab", item)
         self.assertIn("issue", item)
 
+    def test_score_rounds_computed_values(self):
+        mq = Monoqueue({"rules": {
+            "rule1": "(10 if n > 10 else n / 3) -> +X: capped",
+            "rule2": "n -> +X: raw",
+        }})
+        mq.put("https://example.com/a", {"n": 4})
+        mq.put("https://example.com/b", {"n": 30})
+        mq._score()
+        a = mq.impact("https://example.com/a")
+        self.assertAlmostEqual(1 + 4 / 3 + 4, a.value)
+        self.assertEqual(["+1.3: capped", "+4: raw"], a.rules)
+        self.assertEqual(41, mq.impact("https://example.com/b").value)
+
     def test_configured_discourse_host(self):
         mq = _mq(**{"forum.example.com": {"handler": "discourse"}})
         self.assertEqual(
