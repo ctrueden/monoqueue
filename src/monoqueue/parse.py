@@ -159,7 +159,9 @@ def evaluate(expr: str, data: Any, node: Any = None):
         )
 
     if isinstance(node, ast.Compare):
-        value = evaluate(expr, data, node.left)
+        # NB: As in Python, a < b < c means a < b and b < c.
+        lvalue = evaluate(expr, data, node.left)
+        result = True
         for op, cmp in zip(node.ops, node.comparators):
             if not (
                 isinstance(op, ast.BinOp) or
@@ -167,8 +169,10 @@ def evaluate(expr: str, data: Any, node: Any = None):
                 isinstance(op, ast.boolop)
             ):
                 raise ValueError(f"Non-binary comparison op: {type(op)}")
-            value = binary(expr, data, value, op, cmp)
-        return value
+            rvalue = evaluate(expr, data, cmp)
+            result = result and binary(expr, data, lvalue, op, ast.Constant(rvalue))
+            lvalue = rvalue
+        return result
 
     if isinstance(node, ast.BoolOp):
         # NB: No short-circuiting for now.

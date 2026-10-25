@@ -64,6 +64,13 @@ class TestParse(unittest.TestCase):
         # (True and False) or False -> False or False
         self.assertFalse(parse.evaluate("True and False or False", self.data))
 
+    def test_chained_comparison(self):
+        self.assertTrue(parse.evaluate("0 <= outer/inner/innermost < 50", self.data))
+        self.assertFalse(parse.evaluate("0 <= outer/inner/innermost < 40", self.data))
+        self.assertFalse(parse.evaluate("50 < outer/inner/innermost < 60", self.data))
+        # Missing data never satisfies an ordering.
+        self.assertFalse(parse.evaluate("0 <= nothing < 40", self.data))
+
     def test_slash_access(self):
         self.assertEqual(44, parse.evaluate("outer/inner/innermost", self.data))
         self.assertEqual(["Goofus", "Gallant"], parse.evaluate("people/name", self.data))
