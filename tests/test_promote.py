@@ -134,6 +134,21 @@ class TestAgent(unittest.TestCase):
         self.assertIsNone(agent.github_repo("https://github.com/orgs/scijava/projects"))
         self.assertIsNone(agent.github_repo(TAB))
 
+    def test_command_and_args(self):
+        mq = Monoqueue({"rules": {}})
+        config = {"command": "env FOO=1 claude", "args": "--dangerously-skip-permissions"}
+        args, _ = agent.work_command(mq, TAB, config)
+        self.assertEqual(["env", "FOO=1", "claude", "--dangerously-skip-permissions"], args[:4])
+
+        # Triage gets the command, but not the interactive arguments.
+        output = {"structured_output": {"size": "S"}}
+        result = mock.Mock(stdout=json.dumps(output))
+        with mock.patch("monoqueue.agent.subprocess.run", return_value=result) as run:
+            agent.run("Triage this.", agent.TRIAGE_SCHEMA, config)
+        args = run.call_args[0][0]
+        self.assertEqual(["env", "FOO=1", "claude", "-p"], args[:4])
+        self.assertNotIn("--dangerously-skip-permissions", args)
+
     def test_triage_stores_result(self):
         mq = Monoqueue({"rules": {"rule1": 'meta/triage/size == "S" -> +5: quick win'}})
         mq.put(TAB, {"title": "An article"})

@@ -15,7 +15,8 @@ issues promoting them; and to work on them interactively.
 Configure via an [agent] section:
 
     [agent]
-    command = claude              # The agent CLI, for interactive work.
+    command = claude              # The agent CLI.
+    args = --verbose              # Extra arguments, for interactive work only.
     model = sonnet                # The model for triage and drafting.
     code_dir = ~/code             # Where clones of GitHub repos live.
     about = I maintain ...        # About you, to give agents context.
@@ -204,8 +205,8 @@ def run(prompt: str, schema: Dict[str, Any], config: Dict[str, str]) -> Dict[str
     Run an agent non-interactively, with read-only tools, returning its
     structured output, which conforms to the given JSON schema.
     """
-    args = [
-        config.get("command", DEFAULT_COMMAND), "-p", prompt,
+    args = command(config) + [
+        "-p", prompt,
         "--model", config.get("model", DEFAULT_MODEL),
         "--output-format", "json",
         "--json-schema", json.dumps(schema),
@@ -257,8 +258,16 @@ change anything, or post anything publicly.
         prompt += f"\nTriage suggested this next action: {next_action}\n"
     if repo and not cwd:
         prompt += f"\nIf you need the code, clone {repo} into {config.get('code_dir', DEFAULT_CODE_DIR)}/{repo}.\n"
-    args = shlex.split(config.get("command", DEFAULT_COMMAND)) + [prompt]
+    args = command(config) + shlex.split(config.get("args", "")) + [prompt]
     return args, cwd
+
+
+def command(config: Dict[str, str]) -> List[str]:
+    """
+    Get the agent command, split into arguments (e.g. for a wrapper script
+    taking arguments of its own).
+    """
+    return shlex.split(config.get("command", DEFAULT_COMMAND))
 
 
 def github_repo(url: str) -> Optional[str]:

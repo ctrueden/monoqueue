@@ -315,7 +315,11 @@ The item is then linked into the new issue: they remain one action item, at
 the issue's URL, keeping the original's data (tabs, due date, and so on).
 
 Options, in an `[agent]` section:
-- `command`: the agent command (default `claude`).
+- `command`: the agent command (default `claude`). It must accept Claude
+  Code's options, and uses whatever account that command is logged in with.
+- `args`: extra arguments for interactive agent sessions only, e.g.
+  `--dangerously-skip-permissions`; triage and drafting always run with
+  read-only tools.
 - `model`: the model for triage and drafting (default `sonnet`).
 - `code_dir`: where clones of GitHub repositories live, as
   `<code_dir>/<owner>/<repo>` (default `~/code`).
