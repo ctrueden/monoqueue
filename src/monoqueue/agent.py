@@ -17,7 +17,7 @@ Configure via an [agent] section:
     [agent]
     command = claude              # The agent CLI.
     args = --verbose              # Extra arguments, for interactive work only.
-    model = sonnet                # The model for triage and drafting.
+    model = sonnet                # The model to use.
     code_dir = ~/code             # Where clones of GitHub repos live.
     about = I maintain ...        # About you, to give agents context.
 
@@ -258,8 +258,21 @@ change anything, or post anything publicly.
         prompt += f"\nTriage suggested this next action: {next_action}\n"
     if repo and not cwd:
         prompt += f"\nIf you need the code, clone {repo} into {config.get('code_dir', DEFAULT_CODE_DIR)}/{repo}.\n"
-    args = command(config) + shlex.split(config.get("args", "")) + [prompt]
+    args = command(config) + ["--model", config.get("model", DEFAULT_MODEL)]
+    args += shlex.split(config.get("args", "")) + [prompt]
     return args, cwd
+
+
+def edit_first(args: List[str]) -> List[str]:
+    """
+    Wrap an agent command line, whose last argument is its prompt, to let
+    the user edit the prompt in their editor first. Emptying it aborts.
+    """
+    f = tempfile.NamedTemporaryFile("w", suffix=".md", prefix="agent-prompt-", delete=False)
+    with f: f.write(args[-1])
+    script = ('f=$1; shift; ${VISUAL:-${EDITOR:-vi}} "$f" && p=$(cat "$f"); rm -f "$f"; '
+              '[ -n "$p" ] && exec "$@" "$p"')
+    return ["sh", "-c", script, "sh", f.name, *args[:-1]]
 
 
 def command(config: Dict[str, str]) -> List[str]:

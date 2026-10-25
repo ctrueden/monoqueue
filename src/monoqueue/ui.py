@@ -248,7 +248,8 @@ class UI:
         elif key in "pP": self.jump(self.index - 1)
         elif key in "qQ": self.quit()
         elif key in "tT": self.triage()
-        elif key in "aA": self.work()
+        elif key == "a": self.work()
+        elif key == "A": self.work(edit=True)
         elif key in "iI": self.promote()
         elif key in "123456789": self.defer(ord(key) - ord('0'))
         elif key in "jJ" or code == K_DN: self.scroll(1)
@@ -287,12 +288,16 @@ class UI:
             )
         self.message = "Triaging in the background; the result will appear here"
 
-    def work(self):
+    def work(self, edit=False):
         """
         Work on the item with an agent: in a new tmux window, if in tmux,
         so that the queue remains at hand; or else in this terminal.
+
+        :param edit:
+            Whether to edit the agent's prompt first.
         """
         args, cwd = agent.work_command(self.mq, self.url, self.mq.section("agent"))
+        if edit: args = agent.edit_first(args)
         if os.environ.get("TMUX"):
             window = ["tmux", "new-window", "-n", "agent"]
             if cwd: window += ["-c", str(cwd)]

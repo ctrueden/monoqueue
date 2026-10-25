@@ -138,7 +138,8 @@ class TestAgent(unittest.TestCase):
         mq = Monoqueue({"rules": {}})
         config = {"command": "env FOO=1 claude", "args": "--dangerously-skip-permissions"}
         args, _ = agent.work_command(mq, TAB, config)
-        self.assertEqual(["env", "FOO=1", "claude", "--dangerously-skip-permissions"], args[:4])
+        self.assertEqual(["env", "FOO=1", "claude", "--model", "sonnet",
+                          "--dangerously-skip-permissions"], args[:6])
 
         # Triage gets the command, but not the interactive arguments.
         output = {"structured_output": {"size": "S"}}
@@ -148,6 +149,19 @@ class TestAgent(unittest.TestCase):
         args = run.call_args[0][0]
         self.assertEqual(["env", "FOO=1", "claude", "-p"], args[:4])
         self.assertNotIn("--dangerously-skip-permissions", args)
+
+    def test_edit_first(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            # A fake editor that appends to the prompt, and a fake agent that records it.
+            editor = Path(tmp) / "editor"
+            editor.write_text('#!/bin/sh\necho "And more." >> "$1"\n')
+            editor.chmod(0o755)
+            args = agent.edit_first(["sh", "-c", 'printf "%s" "$1" > "$0"', str(out), "Do it."])
+            subprocess.run(args, env={"PATH": "/usr/bin:/bin", "VISUAL": str(editor)}, check=True)
+            self.assertEqual("Do it.And more.", out.read_text())
+            self.assertFalse(Path(args[4]).exists())
 
     def test_triage_stores_result(self):
         mq = Monoqueue({"rules": {"rule1": 'meta/triage/size == "S" -> +5: quick win'}})

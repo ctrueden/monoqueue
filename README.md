@@ -288,7 +288,7 @@ Command          | Description
 `mq link <url> <target>` | Link an item into another, e.g. a tab into an existing issue.
 
 In `mq ui`, press `T` to triage the current item in the background, `A` to
-work on it with an agent, and `I` to promote it to a GitHub issue.
+work on it with an agent (`Shift+A` to edit the agent's prompt first), and `I` to promote it to a GitHub issue.
 
 ### Agents
 
@@ -320,7 +320,7 @@ Options, in an `[agent]` section:
 - `args`: extra arguments for interactive agent sessions only, e.g.
   `--dangerously-skip-permissions`; triage and drafting always run with
   read-only tools.
-- `model`: the model for triage and drafting (default `sonnet`).
+- `model`: the model for agents to use (default `sonnet`).
 - `code_dir`: where clones of GitHub repositories live, as
   `<code_dir>/<owner>/<repo>` (default `~/code`).
 - `about`: a few sentences about you and your work, giving agents context.
