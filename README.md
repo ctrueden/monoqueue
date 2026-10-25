@@ -58,38 +58,61 @@ uv tool install --reinstall-package monoqueue --with-editable monoqueue monoqueu
 
 ## Configuration
 
+Monoqueue reads three files in `~/.config/monoqueue/`:
+
+* `rules.conf`: the [rules](#rules) scoring your action items.
+* `sources.conf`: the [sources](#sources) of your action items, with their
+  API keys and passwords, so keep it private.
+* `settings.conf`: everything else, e.g. for [agents](#agents).
+
+Rules and settings hold no secrets, so you can share them, e.g. among
+your dotfiles. (Older versions of monoqueue used one file,
+`~/.config/monoqueue.conf`; run `mq migrate-config` to split it up.)
+
 ```shell
-vi ~/.config/monoqueue.conf
+mkdir -p ~/.config/monoqueue
+vi ~/.config/monoqueue/rules.conf
 ```
 
-Then add content of the form:
+Each section of `rules.conf` is a group of rules, and each entry a rule,
+named however you like:
 
 ```ini
-[rules]
-rule01 = bookmark                                   -> +20: action bookmark
+# Things I flagged myself.
+[commitments]
+bookmark = bookmark                                   -> +20: action bookmark
 
-rule10 = issue/pull_request                         -> +20: pull request
-rule11 = "ctrueden" in issue/assignees/login        -> +5: assigned to me
-rule12 = ["ctrueden"] == issue/assignees/login      -> +5: assigned to only me
-rule13 = "/monoqueue/" in issue/url                 -> +5: favorite project (monoqueue)
-rule14 = issue/milestone/title == "next-release"    -> +3: next-release milestone
-rule15 = "@ctrueden" in issue/body                  -> +2: mentions me
-rule16 = issue/author_association == "CONTRIBUTOR"  -> +5: issue author is non-member
-rule17 = issue/state == "open"                      -> +1: open issue
-rule18 = issue/reactions/total_count                -> +X: number of reactions
-rule19 = issue/comments                             -> +X: number of comments
-rule20 = issue/draft                                -> -2: draft PR
+[github]
+pr            = issue/pull_request                    -> +20: pull request
+assigned      = "ctrueden" in issue/assignees/login   -> +5: assigned to me
+assigned-only = ["ctrueden"] == issue/assignees/login -> +5: assigned to only me
+monoqueue     = "/monoqueue/" in issue/url            -> +5: favorite project (monoqueue)
+next-release  = issue/milestone/title == "next-release" -> +3: next-release milestone
+mention       = "@ctrueden" in issue/body             -> +2: mentions me
+contributor   = issue/author_association == "CONTRIBUTOR" -> +5: issue author is non-member
+open          = issue/state == "open"                 -> +1: open issue
+reactions     = (10 if issue/reactions/total_count > 10 else issue/reactions/total_count) -> +X: reactions
+comments      = (5 if issue/comments > 20 else issue/comments / 4) -> +X: comments
 
-rule50 = topic/has_accepted_answer is False         -> +5: has no accepted answer
-rule51 = "monoqueue" in topic/tags                  -> +5: monoqueue tag
+[forum]
+unanswered    = topic/has_accepted_answer is False    -> +5: has no accepted answer
+monoqueue-tag = "monoqueue" in topic/tags             -> +5: monoqueue tag
 
-# 10 min = +12960; 1 hour = +2160; 8 hours = +270; 1 day = +90; 1 week = +10; 2 weeks = +5; 1 month = +2
-rule77 = 7776000 / seconds_since_update             -> +X: time since last update (rapid response)
-#rule77 = seconds_since_update / 86400               -> +X: days since last update (backlog tackle)
+# Rapid response: +40 when brand new, halving after 12 hours, then fading.
+[freshness]
+updated = (1728000 / (seconds_since_update + 43200) if seconds_since_update < 2592000 else 0) -> +X: fresh activity
 
-rule99 = issue/milestone/title == "unscheduled"     -> /100: unscheduled milestone
+# Multipliers last, so they scale the total.
+[multipliers]
+draft       = issue/draft                             -> /2: draft PR
+unscheduled = issue/milestone/title == "unscheduled"  -> /100: unscheduled milestone
+```
 
-[firefox]
+Each section of `sources.conf` is a source, whose kind (its `handler`)
+defaults to the section's name:
+
+```ini
+[bookmarks]
 folder = ACTION
 
 [github]
@@ -101,7 +124,7 @@ exclude =
   ^https://mail\.google\.com/
   ^https://calendar\.google\.com/
 
-[scijava]
+[scijava-team]
 dev_id = <your-scijava-developer-id>
 
 [forum.example.com]
@@ -114,8 +137,10 @@ query = #a-category-to-search tags:foo,bar,stuff status:open status:unsolved
 Then protect your secrets:
 
 ```shell
-chmod 600 ~/.config/monoqueue.conf
+chmod 600 ~/.config/monoqueue/sources.conf
 ```
+
+A `#` after whitespace begins a comment, anywhere on a line.
 
 ### Rules
 
@@ -126,11 +151,12 @@ overload of the divide (`/`) operator for digging into nested data structures ea
 Conditional expressions work too, e.g. to cap a value:
 
 ```ini
-rule45 = (5 if issue/comments > 20 else issue/comments / 4) -> +X: comments
+comments = (5 if issue/comments > 20 else issue/comments / 4) -> +X: comments
 ```
 
-Rules run in order, each adding to (or multiplying, or dividing) a score
-that starts at 1. Besides an item's data, rules can see its metadata as
+Rules run in file order, each adding to (or subtracting from, multiplying,
+or dividing) a score that starts at 1; subtracting and dividing never go
+below 1. Besides an item's data, rules can see its metadata as
 `meta`, e.g. `meta/triage/size` from [triage](#agents).
 
 To figure out your rules, first set up your [sources](#sources), then run `mq up`,
@@ -139,11 +165,12 @@ studying the rules above for inspiration. You can do it, I believe in you! <3
 
 ### Sources
 
-Apart from the `[rules]`, each configuration section declares a source.
+Each section of `sources.conf` declares a source, of the kind its
+`handler` names, which defaults to the section's name.
 
-#### Firefox
+#### Firefox bookmarks
 
-The Firefox handler scans your local Firefox installation's bookmarks, and
+The bookmarks handler scans your local Firefox installation's bookmarks, and
 creates an action item for each item within any folder whose name regex-matches
 the configured one.
 
@@ -174,21 +201,21 @@ ago you last looked at any of the item's tabs.
 
 #### SciJava team
 
-The scijava handler reads your community obligations from the
+The scijava-team handler reads your community obligations from the
 [SciJava team portal](https://status.scijava.org/team), and tags each
 item with its roles there, for use in rules such as:
 
 ```ini
-rule30 = "reviewer_prs" in scijava/roles      -> +10: SciJava PR review
-rule31 = "maintainer_releases" in scijava/roles -> +5: SciJava release
-rule32 = "stale_status" in scijava/roles      -> +50: status page broken
+sj-review  = "reviewer_prs" in scijava/roles        -> +10: SciJava PR review
+sj-release = "maintainer_releases" in scijava/roles -> +5: SciJava release
+sj-stale   = "stale_status" in scijava/roles        -> +50: status page broken
 ```
 
 Only roles listed in the `include` option (default:
 `reviewer_prs, maintainer_releases`) create new items; other roles
 (`support_issues`, `debugger_bugs`, `developer_features`) only tag items
 found by other sources, so as not to flood the queue. Put the
-`[scijava]` section after `[github]` so that those items exist first.
+`[scijava-team]` section after `[github]` so that those items exist first.
 
 If the portal's data is older than `max_age_days` (default 2), an item
 is added prompting you to fix the job that generates it.
@@ -222,8 +249,8 @@ Completed and cancelled tasks are skipped. Rules can use `due` (and
 and `task/links` (URLs from the task's URL field and description):
 
 ```ini
-rule40 = seconds_until_due < 86400 -> +50: due within a day
-rule41 = task/priority == 1        -> +20: high priority task
+due-soon      = seconds_until_due < 86400 -> +50: due within a day
+high-priority = task/priority == 1        -> +20: high priority task
 ```
 
 #### GitHub notifications
@@ -235,6 +262,19 @@ repositories you watch. Set `reasons` to a comma-separated list of
 [notification reasons](https://docs.github.com/en/rest/activity/notifications#about-notification-reasons)
 to change this. Like the GitHub handler, it uses a configured `token`,
 or else that of the GitHub CLI. Rules can use `notification/reason`.
+
+Notifications stay unread on GitHub until you read them or mark them done,
+even once their issue or PR is closed. So the handler checks each one's
+issue or PR, and drops review requests and assignments once moot: when
+closed or merged, or no longer requesting or assigning you. Mentions are
+kept, but rules can use `notification/state` (`open`, `closed`, or
+`merged`), and for PRs, `notification/others_requested`, the number of
+reviewers requested besides you:
+
+```ini
+closed      = notification/state in ("closed", "merged") -> -15: mentioned on a closed item
+one-of-many = notification/others_requested >= 2         -> -20: one of several reviewers asked
+```
 
 #### GitHub
 
@@ -250,7 +290,7 @@ How to make a personal access token:
 - Scope: repo (Full control of private repositories)
 - Click green "Generate token" button
 - Copy the resulting token to your clipboard
-- Paste it into `~/.config/monoqueue.conf`
+- Paste it into `~/.config/monoqueue/sources.conf`
   as a `token = <your-token>` pair in a `[github]` section.
 
 For performance across multiple invocations, GitHub content is cached beneath
@@ -269,8 +309,8 @@ How to make a Discourse API key:
 - Scope: Read-only
 - Click the blue "Save" button
 - Copy the resulting key to your clipboard
-- Paste it into `~/.config/monoqueue.conf`
-  as an `key = <your-api-key>` pair in the relevant Discourse section.
+- Paste it into `~/.config/monoqueue/sources.conf`
+  as a `key = <your-api-key>` pair in the relevant Discourse section.
 - Also add a `username = <your-username>` pair to that same section.
 
 ## Usage
@@ -286,9 +326,12 @@ Command          | Description
 `mq triage <url>...` | Have an agent estimate items' size and next action.
 `mq promote <url>` | Create a GitHub issue for an item, and link the item into it.
 `mq link <url> <target>` | Link an item into another, e.g. a tab into an existing issue.
+`mq tune <url> [--edit]` | Adjust the rules with an agent, from a misprioritized item.
+`mq migrate-config` | Split an old `~/.config/monoqueue.conf` into `~/.config/monoqueue/`.
 
 In `mq ui`, press `T` to triage the current item in the background, `A` to
-work on it with an agent (`Shift+A` to edit the agent's prompt first), and `I` to promote it to a GitHub issue.
+work on it with an agent (`Shift+A` to edit the agent's prompt first), `R` to
+adjust the rules when it seems misprioritized, and `I` to promote it to a GitHub issue.
 
 ### Agents
 
@@ -300,8 +343,8 @@ issue's comments) but not change anything. Results are kept in the item's
 metadata, for rules such as:
 
 ```ini
-rule60 = meta/triage/size in ("XS", "S")  -> +5: quick win
-rule61 = meta/triage/actor == "others"    -> /4: waiting on others
+quick-win = meta/triage/size in ("XS", "S")  -> +5: quick win
+waiting   = meta/triage/actor == "others"    -> /4: waiting on others
 ```
 
 Working on an item with an agent opens an interactive agent session about
@@ -314,18 +357,44 @@ you care (if you say), which you can then edit before creating it, or not.
 The item is then linked into the new issue: they remain one action item, at
 the issue's URL, keeping the original's data (tabs, due date, and so on).
 
-Options, in an `[agent]` section:
-- `command`: the agent command (default `claude`). It must accept Claude
-  Code's options, and uses whatever account that command is logged in with.
-- `args`: extra arguments for interactive agent sessions only, e.g.
-  `--dangerously-skip-permissions`; triage and drafting always run with
-  read-only tools.
-- `model`: the model for agents to use (default `sonnet`).
+Tuning the rules starts from an item that seems misprioritized: you say
+in your editor what is wrong with its priority, and why, and then an agent
+(in a new tmux window, when in tmux) reads your rules, the item's data and
+score, and proposes a change, explaining its effect on the queue, before
+editing `rules.conf`. `mq ui` picks up rule changes as soon as they are
+saved. Keeping `rules.conf` under version control makes changes easy to
+review and undo.
+
+Agents are configured in `settings.conf`:
+
+```ini
+[general]
+about = I maintain open source software, and use monoqueue to prioritize
+  my action items, which come from GitHub, forums, browser tabs, and more.
+
+[agent]
+model = sonnet
+
+[triage]
+model = haiku
+```
+
+In `[general]`:
+- `about`: a few sentences about you and your work, giving agents context.
 - `code_dir`: where clones of GitHub repositories live, as
   `<code_dir>/<owner>/<repo>` (default `~/code`).
-- `about`: a few sentences about you and your work, giving agents context.
 
-And in a `[promote]` section:
+In `[agent]`, defaults for all agents, which a section per action
+(`[triage]`, `[work]`, `[promote]`, `[tune]`) may override:
+- `command`: the agent command (default `claude`). It must accept Claude
+  Code's options, and uses whatever account that command is logged in with.
+- `model`: the model to use (default `sonnet`).
+- `args`: extra arguments for interactive agents (work, tune) only, e.g.
+  `--dangerously-skip-permissions`; triage and drafting always run with
+  read-only tools.
+- `timeout`: seconds to wait for triage and drafting (default 600).
+
+And in `[promote]`:
 - `repo`: where to create issues for items not clearly belonging to a
   particular repository, e.g. a public `tasks` repository of your own.
 

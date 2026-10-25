@@ -54,6 +54,7 @@ class UI:
         self.mq = Monoqueue()
         self.mq.load()
         self.metadata_mtime = _mtime(Monoqueue._DEFAULT_METADATA_PATH)
+        self.rules_mtime = _mtime(self.mq.config.rules_path)
         self.stdscr = stdscr
         self.url = None
         self.index = None
@@ -105,7 +106,7 @@ class UI:
         self.draw_divider(row := row + 1)
         self.write(f"Action item {self.index + 1} of {self.count}", (row := row + 1), 0)
         self.write("", (row := row + 1), 0)
-        self.draw_option_line("(O)pen (N)ext (P)rev | Defer (1)(2)(3)... | (T)riage (A)gent (I)ssue | (Q)uit")
+        self.draw_option_line("(O)pen (N)ext (P)rev | Defer (1)(2)(3)... | (T)riage (A)gent (I)ssue (R)ules | (Q)uit")
         prompt_row = (row := row + 1)
         self.draw_divider(row := row + 1)
 
@@ -251,6 +252,7 @@ class UI:
         elif key == "a": self.work()
         elif key == "A": self.work(edit=True)
         elif key in "iI": self.promote()
+        elif key in "rR": self.tune()
         elif key in "123456789": self.defer(ord(key) - ord('0'))
         elif key in "jJ" or code == K_DN: self.scroll(1)
         elif key in "kK" or code == K_UP: self.scroll(-1)
@@ -290,16 +292,30 @@ class UI:
 
     def work(self, edit=False):
         """
-        Work on the item with an agent: in a new tmux window, if in tmux,
-        so that the queue remains at hand; or else in this terminal.
+        Work on the item with an agent.
 
         :param edit:
             Whether to edit the agent's prompt first.
         """
-        args, cwd = agent.work_command(self.mq, self.url, self.mq.section("agent"))
+        args, cwd = agent.work_command(self.mq, self.url, self.mq.config.action("work"))
         if edit: args = agent.edit_first(args)
+        self.run_agent(args, cwd, "agent")
+
+    def tune(self):
+        """
+        Adjust the rules with an agent, after saying in an editor what is
+        wrong with the item's priority. The queue picks up rule changes.
+        """
+        args, cwd = agent.tune_command(self.mq, self.url, self.mq.config.action("tune"))
+        self.run_agent(agent.edit_first(args), cwd, "rules")
+
+    def run_agent(self, args, cwd, name):
+        """
+        Run an interactive agent in a new tmux window, if in tmux, so that
+        the queue remains at hand; or else in this terminal.
+        """
         if os.environ.get("TMUX"):
-            window = ["tmux", "new-window", "-n", "agent"]
+            window = ["tmux", "new-window", "-n", name]
             if cwd: window += ["-c", str(cwd)]
             subprocess.run(window + args, check=False)
             self.message = "Opened an agent in a new tmux window"
@@ -344,6 +360,25 @@ class UI:
             self.stdscr.clear()
             self.refresh()
 
+    def check_rules(self):
+        """
+        Pick up changes to the rules, e.g. by an agent tuning them.
+
+        :return:
+            True if the rules changed.
+        """
+        mtime = _mtime(self.mq.config.rules_path)
+        if mtime == self.rules_mtime: return False
+        self.rules_mtime = mtime
+        try:
+            self.mq.reload_rules()
+        except Exception as e:
+            self.message = f"Cannot reload rules: {e}"
+            return True
+        self.message = "Reloaded the rules"
+        self.jump(self.mq.urls().index(self.url) if self.url in self.mq.urls() else self.index)
+        return True
+
     def check_metadata(self):
         """
         Pick up metadata changed by other processes, e.g. a triage.
@@ -369,7 +404,7 @@ class UI:
         self.stdscr.timeout(2000)
         redraw = True
         while True:
-            if self.check_metadata() or redraw:
+            if self.check_rules() | self.check_metadata() or redraw:
                 self.draw_screen()
                 self.refresh()
             key = self.readkey()
@@ -398,6 +433,7 @@ class UI:
         if self.scroll_offset < 0: self.scroll_offset = 0
 
 def _mtime(path):
+    if path is None: return None
     try:
         return path.stat().st_mtime
     except OSError:

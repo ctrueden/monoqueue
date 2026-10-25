@@ -13,7 +13,8 @@ task) to a public GitHub issue, so that the work is tracked visibly.
 
 The promoted item is then linked into the new issue: they remain one
 action item, at the issue's URL, which also carries the original's data
-(tabs, due date, etc.). Configure via a [promote] section:
+(tabs, due date, etc.). Configure via a [promote] section of settings.conf,
+which may also override the [agent] settings for drafting:
 
     [promote]
     repo = me/tasks               # The fallback repository for new issues.
@@ -62,8 +63,7 @@ def check_promotable(mq, url: str) -> None:
         raise ValueError("Already a GitHub issue")
 
 
-def draft(mq, url: str, why: str = "", config: Dict[str, str] = None,
-          agent_config: Dict[str, str] = None) -> Dict[str, Any]:
+def draft(mq, url: str, why: str = "", config: Dict[str, str] = None) -> Dict[str, Any]:
     """
     Draft an issue for the given action item, via an agent.
     """
@@ -74,7 +74,7 @@ def draft(mq, url: str, why: str = "", config: Dict[str, str] = None,
     repos = candidate_repos(mq, url, config)
     if not repos:
         raise ValueError("No repository for the issue: configure one via [promote] repo")
-    issue = agent.draft_issue(mq, url, repos, why, agent_config)
+    issue = agent.draft_issue(mq, url, repos, why, config)
     # NB: The body must link the original, whatever the agent wrote.
     if url not in issue["body"]: issue["body"] += f"\n\nSee: {url}"
     return issue
@@ -114,7 +114,7 @@ def interact(mq, url: str, why: str = "", repo: Optional[str] = None,
     """
     url = mq.normalize(url)
     print(f"Drafting an issue for {url}...", flush=True)
-    issue = draft(mq, url, why, mq.section("promote"), mq.section("agent"))
+    issue = draft(mq, url, why, mq.config.action("promote"))
     if repo: issue["repo"] = repo
 
     while not yes:

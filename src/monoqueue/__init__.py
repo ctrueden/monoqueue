@@ -11,7 +11,6 @@
 The monoqueue data structure with core business logic.
 """
 
-import configparser
 import datetime
 import json
 import traceback
@@ -21,6 +20,7 @@ from typing import Any, Dict, Optional, List
 from urllib.parse import urlsplit
 
 from . import caldav, discourse, firefox, github, notifications, scijava
+from .config import Config, read_config  # noqa: F401
 from . import time, urls
 from .lock import lock, write_json
 from .log import log
@@ -29,34 +29,14 @@ from .parse import evaluate
 HANDLERS = {
     "caldav": caldav.update,
     "discourse": discourse.update,
-    "firefox": firefox.update,
+    "bookmarks": firefox.update,
+    "firefox": firefox.update,  # The old name of bookmarks.
     "github": github.update,
     "notifications": notifications.update,
-    "scijava": scijava.update,
+    "scijava": scijava.update,  # The old name of scijava-team.
+    "scijava-team": scijava.update,
     "tabs": firefox.update_tabs,
 }
-
-
-# A comment ending a config line: a # with whitespace on both sides, so that
-# values such as "#tag" and "https://example.com/#/route" are left intact.
-_EOL_COMMENT = re.compile("\\s+#(\\s.*)?$")
-
-
-def read_config(path: Path) -> configparser.ConfigParser:
-    """
-    Read a config file, stripping comments that end a line.
-
-    NB: configparser's own inline_comment_prefixes is not used, since it
-    would also strip values beginning with #, and would treat ; as a
-    comment, which rules may use.
-    """
-    config = configparser.ConfigParser()
-    config.read(path)
-    for section in config.sections():
-        for key, value in config.items(section, raw=True):
-            stripped = _EOL_COMMENT.sub("", value)
-            if stripped != value: config.set(section, key, stripped)
-    return config
 
 
 def merge_item(item: Dict[str, Any], data: Dict[str, Any]) -> None:
@@ -112,15 +92,19 @@ class ImpactScore:
 
 
 class Monoqueue:
-    _DEFAULT_CONFIG_PATH = Path("~/.config/monoqueue.conf").expanduser()
     _DEFAULT_ITEMS_PATH = Path("~/.local/share/monoqueue/items.json").expanduser()
     _DEFAULT_METADATA_PATH = Path("~/.local/share/monoqueue/metadata.json").expanduser()
     _DEFAULT_SOURCES_DIR = Path("~/.local/share/monoqueue/sources").expanduser()
     _DEFAULT_STATUS_PATH = Path("~/.local/share/monoqueue/status").expanduser()
 
-    def __init__(self, config: Dict = None):
-        if config is None:
-            config = read_config(Monoqueue._DEFAULT_CONFIG_PATH)
+    def __init__(self, config=None):
+        """
+        :param config:
+            The Config to use, or a dict of sections in the form of an old
+            monoqueue.conf; by default, the user's configuration.
+        """
+        if config is None: config = Config.load()
+        elif not isinstance(config, Config): config = Config.legacy(config)
         self.config = config
         self.items = {}
         self._impact = {}
@@ -129,21 +113,12 @@ class Monoqueue:
         self.progress = None
         self.sources_dir = Monoqueue._DEFAULT_SOURCES_DIR
 
-        # load rules from config
-        self.rules = []
-        for k, v in config["rules"].items():
-            if not k.startswith("rule"): continue
-            arrow = v.find("->")
-            if not arrow:
-                raise ValueError(f"Invalid rule: {v}")
-            expression = v[:arrow].strip()
-            consequence = v[arrow + 2:].strip()
-            self.rules.append((expression, consequence))
+        self.rules = config.rule_list()
         log.debug("Parsed %d rules", len(self.rules))
 
         # Discourse forums need special URL normalization.
         self.discourse_hosts = set(urls.DISCOURSE_HOSTS)
-        for section, section_config in config.items():
+        for section, section_config in config.sources.items():
             if section_config.get("handler") == "discourse":
                 baseurl = section_config.get("baseurl", f"https://{section}")
                 self.discourse_hosts.add(urlsplit(baseurl).netloc.lower())
@@ -253,20 +228,20 @@ class Monoqueue:
         )
         return urls
 
-    def section(self, name: str):
+    def reload_rules(self, config: Optional[Config] = None) -> None:
         """
-        Get the named config section, or an empty one if there is none.
+        Reload the rules, e.g. after editing them, and rescore everything.
         """
-        return self.config[name] if name in self.config else {}
+        fresh = config or Config.load()
+        self.config.rules = fresh.rules
+        self.rules = self.config.rule_list()
+        self._score()
 
     def sources(self) -> List[str]:
         """
         Get the names of the configured sources, in configuration order.
         """
-        return [
-            section for section in self.config
-            if section not in ("DEFAULT", "rules", "scoring", "agent", "promote")
-        ]
+        return list(self.config.sources)
 
     def update(self, sources: Optional[List[str]] = None) -> None:
         """
@@ -283,7 +258,7 @@ class Monoqueue:
         """
         for section in self.sources():
             if sources and section not in sources: continue
-            self._update_source(section, self.config[section])
+            self._update_source(section, self.config.sources[section])
 
         self.items = self._merge_sources()
         self._apply_links()

@@ -163,6 +163,24 @@ class TestAgent(unittest.TestCase):
             self.assertEqual("Do it.And more.", out.read_text())
             self.assertFalse(Path(args[4]).exists())
 
+    def test_tune_command(self):
+        from monoqueue.config import Config
+        mq = Monoqueue(Config(rules={"g": {"tab": "tabs -> +3: open in a tab"}},
+                              rules_path=Path("/home/me/.config/monoqueue/rules.conf")))
+        mq.put(TAB, {"title": "An article", "tabs": [{"device": "odo"}], "description": "x" * 1000})
+        mq._score()
+        args, cwd = agent.tune_command(mq, TAB, {"about": "I am me.", "args": "--fast"})
+        self.assertEqual(Path("/home/me/.config/monoqueue"), cwd)
+        self.assertEqual(["claude", "--model", "sonnet", "--fast"], args[:4])
+        prompt = args[-1]
+        self.assertTrue(prompt.startswith("What is wrong with this item's priority"))
+        self.assertIn("I am me.", prompt)
+        self.assertIn("/home/me/.config/monoqueue/rules.conf", prompt)
+        self.assertIn("Rank: 1 of 1", prompt)
+        self.assertIn("+3: open in a tab", prompt)
+        self.assertIn('"device": "odo"', prompt)
+        self.assertNotIn("x" * 501, prompt)  # Long values are shortened.
+
     def test_triage_stores_result(self):
         mq = Monoqueue({"rules": {"rule1": 'meta/triage/size == "S" -> +5: quick win'}})
         mq.put(TAB, {"title": "An article"})

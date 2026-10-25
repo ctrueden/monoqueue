@@ -12,14 +12,19 @@ Routines to hand action items to an AI agent (Claude Code, by default):
 to triage them, estimating their size and next action; to draft GitHub
 issues promoting them; and to work on them interactively.
 
-Configure via an [agent] section:
+Configure in settings.conf (see monoqueue.config):
+
+    [general]
+    about = I maintain ...        # About you, to give agents context.
+    code_dir = ~/code             # Where clones of GitHub repos live.
 
     [agent]
     command = claude              # The agent CLI.
-    args = --verbose              # Extra arguments, for interactive work only.
     model = sonnet                # The model to use.
-    code_dir = ~/code             # Where clones of GitHub repos live.
-    about = I maintain ...        # About you, to give agents context.
+    args = --verbose              # Extra arguments, for interactive agents only.
+
+    [triage]
+    model = haiku                 # Per action (triage, work, promote, tune).
 
 Triage results are stored in the item's metadata, where rules can see
 them, e.g.:
@@ -261,6 +266,78 @@ change anything, or post anything publicly.
     args = command(config) + ["--model", config.get("model", DEFAULT_MODEL)]
     args += shlex.split(config.get("args", "")) + [prompt]
     return args, cwd
+
+
+def tune_command(mq, url: str, config: Optional[Dict[str, str]] = None):
+    """
+    Get the command line and working directory for adjusting the rules
+    with an agent, starting from an action item that seems misprioritized.
+    The prompt begins with a line for the user to say what is wrong, so is
+    best edited first (see edit_first).
+
+    :return:
+        Tuple of (args, cwd).
+    """
+    config = config or {}
+    rules_path = mq.config.rules_path
+    prompt = f"""What is wrong with this item's priority, and why: 
+
+{config.get("about", DEFAULT_ABOUT)}
+
+Monoqueue (the mq command) ranks my action items by scoring them with
+rules. The item below seems misprioritized to me, as I said above. Help me
+adjust the rules, in {rules_path}, to rank it, and items like it, better.
+
+Read the rules first. Then propose a change, and explain its effect on this
+item and on others, before you edit anything. Prefer general rules, about
+the kind of situation, over rules naming particular items or people, unless
+I say otherwise. Keep the file's style, including its comments and groups.
+
+Each rule is an entry `name = expression -> consequence: description`, and
+each section of the file a group of rules. Rules run in file order, each
+changing a score that starts at 1, when its expression is truthy. Expressions
+are Python syntax over the item's data (shown below): `a/b` digs into nested
+data (e.g. `issue/user/login`), mapping over lists (`issue/assignees/login`);
+missing data is None, and orderings involving None are false; ternaries
+work; `meta/...` is the item's local metadata (e.g. `meta/triage/size`).
+Consequences: +N, -N, xN, /N, or +X (and so on) to use the expression's
+value; -N and /N never go below 1.
+
+To check: `mq info <url>` shows an item's rank, score, and data, and `mq ls`
+ranks everything (rank, score, URL, title). Save `mq ls` before changing the
+rules, to compare after. Changes take effect when the file is saved. Do not
+read the other files in {rules_path.parent if rules_path else "the config"}:
+they may hold secrets.
+
+{describe_score(mq, url)}
+"""
+    args = command(config) + ["--model", config.get("model", DEFAULT_MODEL)]
+    args += shlex.split(config.get("args", "")) + [prompt]
+    return args, rules_path.parent if rules_path else None
+
+
+def describe_score(mq, url: str, max_value: int = 500) -> str:
+    """
+    Describe an action item's rank, score, and data, in plain text.
+    """
+    urls = mq.urls()
+    rank = f"{urls.index(url) + 1} of {len(urls)}" if url in urls else "not active (e.g. deferred)"
+    impact = mq.impact(url)
+    lines = [f"URL: {url}", f"Rank: {rank}"]
+    if impact:
+        lines.append(f"Score: {impact.value:.1f}")
+        lines += [f"  {rule}" for rule in impact.rules]
+
+    def shorten(value):
+        if isinstance(value, dict): return {k: shorten(v) for k, v in value.items()}
+        if isinstance(value, list): return [shorten(v) for v in value]
+        if isinstance(value, str) and len(value) > max_value: return value[:max_value] + "[...]"
+        return value
+
+    lines += ["", "Data:", json.dumps(shorten(mq.item(url) or {}), indent=1)]
+    metadata = mq.metadata(url)
+    if metadata: lines += ["", "Metadata (meta):", json.dumps(shorten(metadata), indent=1)]
+    return "\n".join(lines)
 
 
 def edit_first(args: List[str]) -> List[str]:
