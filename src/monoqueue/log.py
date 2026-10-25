@@ -28,4 +28,6 @@ def setup_logging():
         if os.environ.get("DEBUG")
         else logging.INFO
     )
-    logging.basicConfig(level=level)
+    # E.g. MONOQUEUE_LOG_FORMAT="%(asctime)s %(levelname)s %(message)s"
+    # to timestamp the messages, which helps when logging from cron.
+    logging.basicConfig(level=level, format=os.environ.get("MONOQUEUE_LOG_FORMAT", logging.BASIC_FORMAT))

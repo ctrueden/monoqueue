@@ -327,6 +327,17 @@ Since `mq up <source>` still merges the saved items of all sources,
 sources can be refreshed on different schedules: e.g., tabs every 15
 minutes, and everything else hourly.
 
+### Logging
+
+Set `DEBUG=1` for more detailed log messages, and `MONOQUEUE_LOG_FORMAT`
+to change their [format](https://docs.python.org/3/library/logging.html#logrecord-attributes):
+e.g., to timestamp them when logging from cron, add this line to your
+crontab:
+
+```
+MONOQUEUE_LOG_FORMAT=%(asctime)s %(levelname)s %(message)s
+```
+
 ## Limitations and pitfalls
 
 > Well am I making haste or could it be haste is making me?  
