@@ -40,6 +40,12 @@ NOTIFICATIONS = [
 
 class TestNotifications(unittest.TestCase):
 
+    def setUp(self):
+        # By default, every issue and PR is open, with nobody requested.
+        patch = mock.patch.object(notifications, "subjects", return_value=("me", {}))
+        self.subjects = patch.start()
+        self.addCleanup(patch.stop)
+
     def test_html_url(self):
         urls = [notifications.html_url(n) for n in NOTIFICATIONS]
         self.assertEqual([
@@ -72,6 +78,29 @@ class TestNotifications(unittest.TestCase):
             notifications.update(mq, {"token": "x", "reasons": "subscribed"})
         self.assertEqual({"https://github.com/scijava/pombast/issues/8"}, set(mq.items))
 
+    def test_update_drops_moot_notifications(self):
+        pr = "https://github.com/scijava/pombast/pull/12"
+        issue = "https://github.com/scijava/pombast/issues/7"
+        for state, reviewers, kept in [
+            ("open", ["me", "alice", "bob"], True),
+            ("open", ["org/team"], True),     # Requested of a team.
+            ("open", ["alice"], False),       # No longer requested of me.
+            ("closed", ["me"], False),
+            ("merged", ["me"], False),
+        ]:
+            self.subjects.return_value = ("me", {
+                pr: {"state": state, "assignees": [], "reviewers": reviewers},
+                issue: {"state": "closed", "assignees": [], "reviewers": []},
+            })
+            mq = Monoqueue({"rules": {}})
+            with mock.patch.object(notifications, "fetch", return_value=NOTIFICATIONS):
+                notifications.update(mq, {"token": "x"})
+            self.assertEqual(kept, pr in mq.items, (state, reviewers))
+            # Mentions are kept even when closed, with the state.
+            self.assertEqual("closed", mq.item(issue)["notification"]["state"])
+            if kept and state == "open" and "me" in reviewers:
+                self.assertEqual(2, mq.item(pr)["notification"]["others_requested"])
+
     def test_fetch_follows_pages(self):
         pages = [
             mock.Mock(links={"next": {"url": "https://api.github.com/notifications?page=2"}},
@@ -81,6 +110,27 @@ class TestNotifications(unittest.TestCase):
         with mock.patch("requests.Session.get", side_effect=pages) as get:
             self.assertEqual(NOTIFICATIONS, notifications.fetch("x"))
         self.assertEqual(2, get.call_count)
+
+
+class TestSubjects(unittest.TestCase):
+
+    def test_subjects(self):
+        pr = "https://github.com/scijava/pombast/pull/12"
+        response = mock.Mock(json=lambda: {"data": {
+            "viewer": {"login": "me"},
+            "s0": {"state": "OPEN", "assignees": {"nodes": [{"login": "me"}]},
+                   "reviewRequests": {"nodes": [
+                       {"requestedReviewer": {"login": "alice"}},
+                       {"requestedReviewer": {"combinedSlug": "org/team"}},
+                       {"requestedReviewer": {}},  # E.g. a bot.
+                   ]}},
+        }})
+        with mock.patch("requests.post", return_value=response) as post:
+            me, states = notifications.subjects("x", [pr, "https://github.com/o/r/releases"])
+        self.assertEqual("me", me)
+        self.assertEqual({pr: {"state": "open", "assignees": ["me"], "reviewers": ["alice", "org/team"]}}, states)
+        self.assertIn(f'resource(url: "{pr}")', post.call_args[1]["json"]["query"])
+        self.assertNotIn("releases", post.call_args[1]["json"]["query"])
 
 
 class TestStatus(unittest.TestCase):

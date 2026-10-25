@@ -16,8 +16,18 @@ activity on repositories you watch. Each item gets a notification
 field, for use in rules such as:
 
     notification/reason == "review_requested" -> +10: review requested
+
+Notifications stay unread on GitHub until read or marked done, even once
+their issue or PR is closed, or once you are no longer asked. So each
+notification's issue or PR is checked too: review requests and assignments
+are dropped once moot (closed, merged, or no longer requesting or assigning
+you), while mentions are kept, with the state recorded, e.g.:
+
+    notification/state != "open"         -> /4: closed
+    notification/others_requested >= 3   -> /2: one of many reviewers
 """
 
+import json
 import re
 
 import requests
@@ -28,6 +38,7 @@ from .log import log
 DEFAULT_REASONS = "mention, team_mention, review_requested, assign"
 
 _API_URL = "https://api.github.com/notifications"
+_GRAPHQL_URL = "https://api.github.com/graphql"
 _MAX_PAGES = 20
 
 
@@ -37,20 +48,99 @@ def update(mq, config):
     if not token:
         raise RuntimeError("No GitHub token: configure one, or log in with gh")
 
-    for notification in fetch(token):
-        if notification.get("reason") not in reasons: continue
+    personal = [n for n in fetch(token) if n.get("reason") in reasons]
+    me, states = subjects(token, [html_url(n) for n in personal])
+    for notification in personal:
+        url = html_url(notification)
         subject = notification.get("subject", {})
-        mq.put(html_url(notification), {
+        data = {
+            "id": notification.get("id"),
+            "reason": notification.get("reason"),
+            "type": subject.get("type"),
+            "repo": notification.get("repository", {}).get("full_name"),
+            "unread": notification.get("unread"),
+        }
+        state = states.get(url)
+        if state:
+            if moot(data["reason"], state, me):
+                log.debug("Skipping moot notification: %s", url)
+                continue
+            others = [r for r in state["reviewers"] if r != me]
+            data.update(state=state["state"], reviewers=others, others_requested=len(others))
+        mq.put(url, {
             "title": subject.get("title"),
             "updated": notification.get("updated_at"),
-            "notification": {
-                "id": notification.get("id"),
-                "reason": notification.get("reason"),
-                "type": subject.get("type"),
-                "repo": notification.get("repository", {}).get("full_name"),
-                "unread": notification.get("unread"),
-            },
+            "notification": data,
         })
+
+
+def moot(reason, state, me):
+    """
+    Whether a notification no longer asks anything of me: a review request
+    or assignment on a closed issue or PR, or no longer requesting or
+    assigning me. NB: A review requested of a team counts as requested.
+    """
+    if reason == "review_requested":
+        return state["state"] != "open" or not (
+            me in state["reviewers"] or any("/" in r for r in state["reviewers"])
+        )
+    if reason == "assign":
+        return state["state"] != "open" or me not in state["assignees"]
+    return False
+
+
+_SUBJECT_FIELDS = """
+    ... on Issue { state assignees(first: 50) { nodes { login } } }
+    ... on PullRequest {
+      state
+      assignees(first: 50) { nodes { login } }
+      reviewRequests(first: 50) {
+        nodes { requestedReviewer { ... on User { login } ... on Team { combinedSlug } } }
+      }
+    }
+"""
+
+
+def subjects(token, urls):
+    """
+    Look up the issues and PRs at the given URLs, in one GraphQL query.
+
+    :return:
+        Tuple of (my login, dict of URL -> {state, assignees, reviewers}),
+        where state is "open", "closed" or "merged", and reviewers are the
+        requested reviewers' logins, or org/team slugs for teams.
+    """
+    urls = sorted({u for u in urls if re.search("/(issues|pull)/\\d+$", u)})
+    if not urls: return None, {}
+    aliases = "\n".join(
+        f"  s{i}: resource(url: {json.dumps(u)}) {{{_SUBJECT_FIELDS}}}"
+        for i, u in enumerate(urls)
+    )
+    response = requests.post(
+        _GRAPHQL_URL,
+        json={"query": f"query {{\n  viewer {{ login }}\n{aliases}\n}}"},
+        headers={"User-Agent": "monoqueue", "Authorization": f"bearer {token}"},
+        timeout=60,
+    )
+    response.raise_for_status()
+    data = response.json().get("data")
+    if not data:
+        raise RuntimeError(f"GitHub GraphQL query failed: {response.json().get('errors')}")
+
+    states = {}
+    for i, url in enumerate(urls):
+        subject = data.get(f"s{i}")
+        if not subject or "state" not in subject: continue  # E.g. deleted, or no access.
+        reviewers = [
+            r.get("login") or r.get("combinedSlug")
+            for r in (n.get("requestedReviewer") or {} for n in subject.get("reviewRequests", {}).get("nodes", []))
+        ]
+        states[url] = {
+            "state": subject["state"].lower(),
+            "assignees": [a["login"] for a in subject["assignees"]["nodes"]],
+            "reviewers": [r for r in reviewers if r],
+        }
+    return data["viewer"]["login"], states
 
 
 def fetch(token):
