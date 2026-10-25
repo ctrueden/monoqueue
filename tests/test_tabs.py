@@ -99,26 +99,20 @@ class TestTabs(unittest.TestCase):
         devices = firefox.snapshot()["devices"]
         self.assertEqual([ISSUE], [t["url"] for t in devices["troi"]["tabs"]])
 
-    def test_merge_devices_newest_wins(self):
-        old = {"devices": {"odo": {"seen": "2026-10-01T00:00:00Z", "tabs": [{"url": "a"}]}}}
-        new = {"devices": {"odo": {"seen": "2026-10-20T00:00:00Z", "tabs": [{"url": "b"}]}}}
-        self.assertEqual([{"url": "b"}], firefox.merge_devices([new, old])["odo"]["tabs"])
-        self.assertEqual([{"url": "b"}], firefox.merge_devices([old, new])["odo"]["tabs"])
-
     def test_update_tabs(self):
-        snapshot_dir = self.root / "snapshots"
-        snapshot_dir.mkdir()
-        (snapshot_dir / "troi.json").write_text(json.dumps({"devices": {"troi": {
-            "seen": "2026-10-19T22:17:59Z",
-            "tabs": [{"url": ISSUE, "title": "From troi", "last_accessed": "2026-10-19T22:00:00Z"}],
-        }}}))
+        db = self.root / "firefox" / "abc.default-release" / "synced-tabs.db"
+        cx = sqlite3.connect(db)
+        record = {"clientName": "Firefox on troi", "tabs": [
+            {"title": "From troi", "urlHistory": [ISSUE], "lastUsed": 1792725687}]}
+        cx.execute("insert into tabs values (?, ?, ?)", ("c", json.dumps(record), 1792725687000))
+        cx.commit()
+        cx.close()
 
         mq = Monoqueue({"rules": {}})
         mq.put(ISSUE, {"title": "GitHub title", "issue": {}})
         firefox.update_tabs(mq, {
-            "dir": str(snapshot_dir),
             "exclude": "\n^https://forum\\.image\\.sc/\n",
-            # NB: Keep troi's fixed timestamp from aging out in the future.
+            # NB: Keep the fixed timestamps from aging out in the future.
             "max_device_age_days": "100000",
         })
 
@@ -131,21 +125,9 @@ class TestTabs(unittest.TestCase):
         mq._score()
         self.assertIn("seconds_since_tab_access", item)
 
-    def test_pull(self):
-        snapshot_dir = self.root / "pulled"
-        good = json.dumps({"devices": {"laforge": {"seen": "2026-10-23T00:00:00Z", "tabs": []}}})
-        firefox.pull("laforge", f"echo '{good}'", snapshot_dir)
-        self.assertEqual(json.loads(good), json.loads((snapshot_dir / "laforge.json").read_text()))
-
-        # A failed pull (e.g. computer is off) keeps the previous snapshot.
-        firefox.pull("laforge", "false", snapshot_dir)
-        firefox.pull("laforge", "echo not-json", snapshot_dir)
-        self.assertEqual(json.loads(good), json.loads((snapshot_dir / "laforge.json").read_text()))
-        self.assertEqual(["laforge.json"], [p.name for p in snapshot_dir.iterdir()])
-
     def test_update_tabs_skips_dormant_devices(self):
         mq = Monoqueue({"rules": {}})
-        firefox.update_tabs(mq, {"dir": str(self.root / "none"), "max_device_age_days": "0"})
+        firefox.update_tabs(mq, {"max_device_age_days": "0"})
         self.assertEqual({}, mq.items)
 
 

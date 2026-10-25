@@ -97,7 +97,6 @@ token = <your-github-api-token>
 query = is:open+org:my-favorite-org+org:my-other-favorite-org+repo:a-repo-I-manage
 
 [tabs]
-pull = my-desktop
 exclude =
   ^https://mail\.google\.com/
   ^https://calendar\.google\.com/
@@ -146,30 +145,20 @@ across all your devices. Tabs open on several devices become one item,
 which also merges with matching items from other sources (e.g. a tab
 showing a GitHub issue merges with that issue from the GitHub source).
 
-On a computer with Firefox, `mq snapshot` writes that computer's tabs,
-plus the tabs of your other devices as synced by Firefox Sync, to
-`~/.local/share/monoqueue/tabs/<hostname>.json`. Only each tab's URL,
-title and last access time are saved. The tabs handler reads the local
-Firefox (if any) plus all snapshots in that directory, using the most
-recently seen tabs of each device.
+Tabs come from the Firefox profiles of the computer running `mq up`:
+its own open tabs, plus the tabs of your other devices as synced by
+Firefox Sync. So on an always-on server, install Firefox and sign in to
+Sync there. Firefox syncs when it starts, so it need not run all the
+time: briefly running it headless before each update suffices, e.g.:
 
-To gather tabs on a computer without Firefox, such as an always-on
-server, list desktops in the `pull` option: monoqueue then runs
-`mq snapshot -` on each via ssh (see `pull_command`) during `mq up`.
-If a desktop is off, its previous snapshot is used. Since Firefox Sync
-already shares tabs between devices, pulling from one desktop is
-enough to see the tabs of all of them.
+```
+*/15 * * * * timeout 90 firefox --headless >/dev/null 2>&1; mq up tabs
+```
 
 Options:
-- `pull`: hosts to pull snapshots from via ssh.
-- `pull_command`: the command to pull a snapshot, with `{host}` for the
-  host; by default, `mq snapshot -` via `ssh -o BatchMode=yes`, looking for
-  `mq` in `~/bin` and `~/.local/bin` before the PATH.
 - `exclude`: regular expressions, one per line, for URLs to ignore.
   Pinned tabs are always ignored.
 - `max_device_age_days`: skip devices not seen for this many days (default 30).
-- `dir`: where snapshots live (default `~/.local/share/monoqueue/tabs`).
-- `local`: set to `false` to ignore this computer's Firefox.
 
 Rules can use `tabs/device`, and `seconds_since_tab_access` for how long
 ago you last looked at any of the item's tabs.
@@ -284,7 +273,6 @@ Command          | Description
 `mq ui`          | Launch the interactive user interface.
 `mq ls`          | List action items in plaintext.
 `mq ls --html`   | List action items as an HTML report.
-`mq snapshot`    | Save open Firefox tabs, for `tabs` sources elsewhere.
 `mq info <url>`  | Show detailed info about an action item.
 
 ### Over ssh

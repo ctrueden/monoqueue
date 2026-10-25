@@ -16,11 +16,9 @@ store and from other devices' tabs synced via Firefox Sync.
 import json
 import os
 import re
-import shlex
 import shutil
 import socket
 import sqlite3
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -48,16 +46,7 @@ _PROFILE_PARENTS = [
     "~/Library/Application Support/Firefox/Profiles",
 ]
 
-DEFAULT_SNAPSHOT_DIR = Path("~/.local/share/monoqueue/tabs").expanduser()
 DEFAULT_MAX_DEVICE_AGE_DAYS = 30
-# NB: Non-interactive ssh sessions often lack ~/bin and ~/.local/bin
-# on the PATH, so look for mq there first.
-DEFAULT_PULL_COMMAND = (
-    "ssh -o BatchMode=yes -o ConnectTimeout=5 {host} "
-    "'for mq in ~/bin/mq ~/.local/bin/mq mq; do "
-    "command -v $mq >/dev/null && exec $mq snapshot -; done; "
-    "echo mq not found >&2; exit 127'"
-)
 
 
 def profile_files(name):
@@ -134,14 +123,10 @@ def update_tabs(mq, config):
     """
     Add an action item for each open tab, across all devices.
 
-    Tabs come from this computer's Firefox, if any, and from snapshot
-    files written by "mq snapshot" on other computers, or pulled from the
-    hosts listed in the pull option by running "mq snapshot -" via ssh
-    there (see pull_command). For each device,
-    the most recently seen data wins. Devices not seen for longer than
+    Tabs come from this computer's Firefox: its own tabs, plus other
+    devices' tabs synced via Firefox Sync. Devices not seen for longer than
     max_device_age_days are skipped, since their tabs are likely gone.
     """
-    snapshot_dir = Path(config.get("dir", str(DEFAULT_SNAPSHOT_DIR))).expanduser()
     excludes = [
         re.compile(pattern.strip())
         for pattern in config.get("exclude", "").splitlines()
@@ -149,22 +134,9 @@ def update_tabs(mq, config):
     ]
     max_device_age = 86400 * float(config.get("max_device_age_days", DEFAULT_MAX_DEVICE_AGE_DAYS))
 
-    pull_command = config.get("pull_command", DEFAULT_PULL_COMMAND)
-    for host in config.get("pull", "").replace(",", " ").split():
-        pull(host, pull_command, snapshot_dir)
-
-    snapshots = []
-    if config.get("local", "true").lower() != "false":
-        snapshots.append(snapshot())
-    for path in sorted(snapshot_dir.glob("*.json")):
-        try:
-            snapshots.append(json.loads(path.read_text()))
-        except (OSError, ValueError) as e:
-            log.warning("Cannot read tab snapshot %s: %s", path, e)
-
     # Collect the tabs per URL, across devices.
     tabs = {}
-    for device, info in merge_devices(snapshots).items():
+    for device, info in snapshot()["devices"].items():
         if time.age(info["seen"]).total_seconds() > max_device_age:
             log.debug("Skipping tabs of %s, last seen %s", device, info["seen"])
             continue
@@ -181,48 +153,6 @@ def update_tabs(mq, config):
         data = {"tabs": entry["tabs"]}
         if entry["title"]: data["title"] = entry["title"]
         mq.put(url, data)
-
-
-def pull(host, command, snapshot_dir):
-    """
-    Fetch a tab snapshot from another computer, saving it as
-    <snapshot_dir>/<host>.json. On failure (e.g. the computer is off),
-    any previous snapshot from that host is kept.
-    """
-    log.info("Pulling tabs from %s...", host)
-    args = shlex.split(command.replace("{host}", host))
-    try:
-        result = subprocess.run(args, capture_output=True, text=True, timeout=120, check=False)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        log.warning("Cannot pull tabs from %s: %s", host, e)
-        return
-    if result.returncode != 0:
-        log.warning("Cannot pull tabs from %s: %s", host, result.stderr.strip())
-        return
-    try:
-        json.loads(result.stdout)
-    except ValueError:
-        log.warning("Invalid tab snapshot from %s", host)
-        return
-
-    snapshot_dir.mkdir(parents=True, exist_ok=True)
-    path = snapshot_dir / f"{host}.json"
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(result.stdout)
-    os.replace(tmp, path)
-
-
-def merge_devices(snapshots):
-    """
-    Combine tab snapshots, keeping the most recently seen tabs per device.
-    """
-    devices = {}
-    for snap in snapshots:
-        for device, info in snap.get("devices", {}).items():
-            current = devices.get(device)
-            if current is None or _newer(info["seen"], current["seen"]):
-                devices[device] = info
-    return devices
 
 
 def snapshot():
