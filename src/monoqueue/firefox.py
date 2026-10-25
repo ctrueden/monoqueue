@@ -88,7 +88,7 @@ def bookmarks(folder_name=None):
 
     for db in places_dbs:
         # NB: make a copy to avoid locked DB in case Firefox is open.
-        shutil.copyfile(db, temp_db_path)
+        _copy_db(db, Path(temp_db_path))
 
         cx = sqlite3.connect(temp_db_path)
 
@@ -316,7 +316,7 @@ def _synced_tabs(profile):
     with tempfile.TemporaryDirectory() as tmp:
         # NB: Copy to avoid a locked DB in case Firefox is open.
         copy = Path(tmp) / db.name
-        shutil.copyfile(db, copy)
+        _copy_db(db, copy)
         cx = sqlite3.connect(copy)
         try:
             rows = cx.execute("select record, last_modified from tabs").fetchall()
@@ -343,6 +343,18 @@ def _synced_tabs(profile):
         device = _device_name(data.get("clientName", ""))
         results.append((device, time.string(last_modified // 1000), tabs))
     return results
+
+
+def _copy_db(db, copy):
+    """
+    Copy an SQLite database, including its write-ahead log, if any: while
+    Firefox runs, and even after it exits, recent changes may be only there.
+    """
+    shutil.copyfile(db, copy)
+    wal = db.with_name(db.name + "-wal")
+    wal_copy = copy.with_name(copy.name + "-wal")
+    if wal.exists(): shutil.copyfile(wal, wal_copy)
+    elif wal_copy.exists(): wal_copy.unlink()
 
 
 def _newer(a, b):

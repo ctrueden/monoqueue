@@ -83,6 +83,22 @@ class TestTabs(unittest.TestCase):
         self.assertEqual([POST], [t["url"] for t in devices["odo"]["tabs"]])
         self.assertEqual("2026-10-23T03:21:27Z", devices["odo"]["seen"])
 
+    def test_snapshot_reads_write_ahead_log(self):
+        # While Firefox runs, its latest synced tabs may be only in the WAL.
+        db = self.root / "firefox" / "abc.default-release" / "synced-tabs.db"
+        cx = sqlite3.connect(db)
+        self.addCleanup(cx.close)
+        cx.execute("pragma journal_mode=wal")
+        cx.execute("pragma wal_autocheckpoint=0")
+        record = {"clientName": "Firefox on troi", "tabs": [
+            {"title": "Issue", "urlHistory": [ISSUE], "lastUsed": 1792725687}]}
+        cx.execute("insert into tabs values (?, ?, ?)", ("c", json.dumps(record), 1792725687000))
+        cx.commit()
+        self.assertTrue(db.with_name(db.name + "-wal").exists())
+
+        devices = firefox.snapshot()["devices"]
+        self.assertEqual([ISSUE], [t["url"] for t in devices["troi"]["tabs"]])
+
     def test_merge_devices_newest_wins(self):
         old = {"devices": {"odo": {"seen": "2026-10-01T00:00:00Z", "tabs": [{"url": "a"}]}}}
         new = {"devices": {"odo": {"seen": "2026-10-20T00:00:00Z", "tabs": [{"url": "b"}]}}}
