@@ -123,6 +123,15 @@ Rules are written in Python syntax, parsed by Python's `ast` module, and evaluat
 using a custom evaluator to avoid calling the insecure `eval` function. The monoqueue
 evaluator supports standard Python unary and binary operators, as well as a special
 overload of the divide (`/`) operator for digging into nested data structures easily.
+Conditional expressions work too, e.g. to cap a value:
+
+```ini
+rule45 = (5 if issue/comments > 20 else issue/comments / 4) -> +X: comments
+```
+
+Rules run in order, each adding to (or multiplying, or dividing) a score
+that starts at 1. Besides an item's data, rules can see its metadata as
+`meta`, e.g. `meta/triage/size` from [triage](#agents).
 
 To figure out your rules, first set up your [sources](#sources), then run `mq up`,
 then browse your monoqueue data in `~/.local/share/monoqueue/items.json` while
@@ -274,6 +283,47 @@ Command          | Description
 `mq ls`          | List action items in plaintext.
 `mq ls --html`   | List action items as an HTML report.
 `mq info <url>`  | Show detailed info about an action item.
+`mq triage <url>...` | Have an agent estimate items' size and next action.
+`mq promote <url>` | Create a GitHub issue for an item, and link the item into it.
+`mq link <url> <target>` | Link an item into another, e.g. a tab into an existing issue.
+
+In `mq ui`, press `T` to triage the current item in the background, `A` to
+work on it with an agent, and `I` to promote it to a GitHub issue.
+
+### Agents
+
+Triage asks an agent ([Claude Code](https://claude.com/claude-code), by
+default) to summarize an item, estimate its size (XS to XL), and name its
+next action and who must take it: you, an agent, or others, on whom you
+are then waiting. The agent may look closer at the item (e.g. read an
+issue's comments) but not change anything. Results are kept in the item's
+metadata, for rules such as:
+
+```ini
+rule60 = meta/triage/size in ("XS", "S")  -> +5: quick win
+rule61 = meta/triage/actor == "others"    -> /4: waiting on others
+```
+
+Working on an item with an agent opens an interactive agent session about
+it, in a new tmux window (when in tmux), within the local clone of the
+item's GitHub repository, if any. The agent looks into the item and
+proposes a plan before changing anything.
+
+Promoting an item has an agent draft a GitHub issue for it, including why
+you care (if you say), which you can then edit before creating it, or not.
+The item is then linked into the new issue: they remain one action item, at
+the issue's URL, keeping the original's data (tabs, due date, and so on).
+
+Options, in an `[agent]` section:
+- `command`: the agent command (default `claude`).
+- `model`: the model for triage and drafting (default `sonnet`).
+- `code_dir`: where clones of GitHub repositories live, as
+  `<code_dir>/<owner>/<repo>` (default `~/code`).
+- `about`: a few sentences about you and your work, giving agents context.
+
+And in a `[promote]` section:
+- `repo`: where to create issues for items not clearly belonging to a
+  particular repository, e.g. a public `tasks` repository of your own.
 
 ### Over ssh
 

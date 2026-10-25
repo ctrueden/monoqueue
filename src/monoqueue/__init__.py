@@ -155,7 +155,27 @@ class Monoqueue:
         if items_path is not None: self.items = self._load(items_path)
         self._metadata = self._load_metadata(metadata_path)
         self._dirty_metadata.clear()
+        self._apply_links()
         if self.items: self._score()
+
+    def reload_metadata(self, metadata_path: Path = _DEFAULT_METADATA_PATH) -> None:
+        """
+        Reload metadata from disk, to see changes by other processes (e.g.
+        a triage running in the background), keeping unsaved changes.
+        """
+        metadata = self._load_metadata(metadata_path)
+        for url in self._dirty_metadata:
+            metadata[url] = self._metadata[url]
+        changed = {
+            url for url in metadata.keys() | self._metadata.keys()
+            if metadata.get(url) != self._metadata.get(url)
+        }
+        self._metadata = metadata
+        # NB: Rescore only what changed, since scoring everything is slow.
+        changed |= {metadata[url]["linked_to"] for url in changed if metadata.get(url, {}).get("linked_to")}
+        self._apply_links()
+        for url in changed:
+            if url in self.items: self._score_item(url)
 
     def save(self,
         items_path: Optional[Path] = _DEFAULT_ITEMS_PATH,
@@ -233,13 +253,19 @@ class Monoqueue:
         )
         return urls
 
+    def section(self, name: str):
+        """
+        Get the named config section, or an empty one if there is none.
+        """
+        return self.config[name] if name in self.config else {}
+
     def sources(self) -> List[str]:
         """
         Get the names of the configured sources, in configuration order.
         """
         return [
             section for section in self.config
-            if section not in ("DEFAULT", "rules", "scoring")
+            if section not in ("DEFAULT", "rules", "scoring", "agent", "promote")
         ]
 
     def update(self, sources: Optional[List[str]] = None) -> None:
@@ -260,6 +286,7 @@ class Monoqueue:
             self._update_source(section, self.config[section])
 
         self.items = self._merge_sources()
+        self._apply_links()
         self._score()
 
     def _update_source(self, section: str, config) -> None:
@@ -405,6 +432,61 @@ class Monoqueue:
         """
         return self._metadata.setdefault(self.normalize(url), {})
 
+    def mark_dirty(self, url: str) -> None:
+        """
+        Note that the given URL's metadata changed, so that save() saves it.
+        """
+        self._dirty_metadata.add(self.normalize(url))
+
+    def link(self, url: str, target: str) -> str:
+        """
+        Link an action item into another one, e.g. a browser tab into the
+        GitHub issue promoted from it: from then on, they are one item,
+        at the target's URL, combining both items' data, and listing the
+        linked URLs in its links metadata.
+
+        :return:
+            The target's normalized URL.
+        """
+        url, target = self.normalize(url), self.normalize(target)
+        if url == target: raise ValueError(f"Cannot link an item to itself: {url}")
+        # Link to the end of any chain of links, so that items never move twice.
+        while self.metadata(target).get("linked_to"):
+            target = self.metadata(target)["linked_to"]
+        source, dest = self.metadata(url), self.metadata(target)
+        source["linked_to"] = target
+        links = dest.setdefault("links", [])
+        for linked in [url] + source.pop("links", []):
+            if linked not in links: links.append(linked)
+            self.metadata(linked)["linked_to"] = target
+            self.mark_dirty(linked)
+        # The target inherits what the item had, unless it has its own.
+        for key in ("triage", "note", "deferred_at", "deferred_until"):
+            if key in source and key not in dest: dest[key] = source[key]
+        self.mark_dirty(target)
+        self._apply_links()
+        self._impact.pop(url, None)
+        if target in self.items: self._score_item(target)
+        return target
+
+    def _apply_links(self) -> None:
+        """
+        Merge each linked item into the item it is linked to.
+        """
+        for url in [u for u in self.items if self._metadata.get(u, {}).get("linked_to")]:
+            target = self._metadata[url]["linked_to"]
+            data = self.items.pop(url)
+            if target not in self.items:
+                # E.g. a new issue its source has not fetched yet.
+                self.items[target] = data
+                continue
+            merged = self.items[target]
+            sources = merged.get("sources", []) + [
+                s for s in data.get("sources", []) if s not in merged.get("sources", [])
+            ]
+            merge_item(merged, {k: v for k, v in data.items() if k not in merged or k in ("created", "updated")})
+            if sources: merged["sources"] = sources
+
     def defer(self, url: str, until: datetime.datetime) -> None:
         """
         Defer the given action item for a specified amount of time.
@@ -416,7 +498,7 @@ class Monoqueue:
         metadata = self.metadata(url)
         metadata["deferred_at"] = time.string(time.now())
         metadata["deferred_until"] = time.string(until)
-        self._dirty_metadata.add(self.normalize(url))
+        self.mark_dirty(url)
 
     def active(self, url: str) -> bool:
         """
@@ -473,80 +555,89 @@ class Monoqueue:
     def _score(self):
         log.debug("Scoring action items...")
 
-        # Compute time-sensitive age fields.
-        for item in self.items.values():
-            if "created" in item:
-                created_age = time.age(item["created"])
-                item["seconds_since_creation"] = created_age.total_seconds()
-            if "updated" in item:
-                updated_age = time.age(item["updated"])
-                item["seconds_since_update"] = updated_age.total_seconds()
-            if item.get("due"):
-                item["seconds_until_due"] = -time.age(item["due"]).total_seconds()
-            accessed = [t["last_accessed"] for t in item.get("tabs", []) if t.get("last_accessed")]
-            if accessed:
-                tab_age = time.age(max(accessed, key=time.str2dt))
-                item["seconds_since_tab_access"] = tab_age.total_seconds()
-
         # Initially, each rule has not applied to any action items.
         unused_rules = set(consequence for _, consequence in self.rules)
 
         self._impact.clear()
-        for url, info in self.items.items():
-            score_value = 1
-            score_rules = []
-            for expression, consequence in self.rules:
-                # Try to apply the rule to this action item.
-                applies = evaluate(expression, info)
-                if not applies: continue  # Rule does not apply.
-
-                # The rule applies. Mark it as used.
-                if consequence in unused_rules: unused_rules.remove(consequence)
-
-                # Consequences are of the form:
-                #
-                #   +3: next-release milestone
-                #   ^^  ^
-                #   ||  \-- description
-                #   |\----- score modification value
-                #   \------ operator (+, -, x, or /)
-                #
-                # So in the above example, the score should increase by 3.
-                #
-                # If the score modification value is X instead of a number,
-                # it is expected the rule application will return the number.
-                # For example:
-                #
-                #   issue/comments -> +X: number of comments
-                #
-                # The above rule should increase the score by the comment count.
-
-                op = consequence[0]
-                smv = consequence[1:consequence.index(":")]
-
-                if smv == "X":
-                    # Score mod value is the rule evaluation result.
-                    smv = float(applies)
-                    # Replace X with the actual number, legibly rounded.
-                    shown = f"{smv:.1f}".removesuffix(".0")
-                    consequence = f"{op}{shown}{consequence[2:]}"
-                else:
-                    # Score mod value is a constant declared in the consequence.
-                    smv = float(smv)
-
-                # Now change the score using the operator and score modification value.
-                if op == '+': score_value += smv
-                elif op == '-': score_value = max(1, score_value - smv)
-                elif op == 'x': score_value *= smv
-                elif op == '/': score_value = max(1, score_value / smv)
-                else: raise RuntimeError(f"Invalid rule consequence: {consequence}")
-
-                # Record the consequence on this item's list of applied rules.
-                score_rules.append(consequence)
-
-            self._impact[url] = ImpactScore(score_value, score_rules)
+        for url in self.items:
+            self._score_item(url, unused_rules)
 
         # Warn about rules that never applied to an action item.
         for _, consequence in self.rules:
             if consequence in unused_rules:
                 log.debug(f"Irrelevant rule: %s", consequence)
+
+    def _score_item(self, url: str, unused_rules: Optional[set] = None) -> None:
+        item = self.items[url]
+
+        # Compute time-sensitive age fields.
+        if "created" in item:
+            created_age = time.age(item["created"])
+            item["seconds_since_creation"] = created_age.total_seconds()
+        if "updated" in item:
+            updated_age = time.age(item["updated"])
+            item["seconds_since_update"] = updated_age.total_seconds()
+        if item.get("due"):
+            item["seconds_until_due"] = -time.age(item["due"]).total_seconds()
+        accessed = [t["last_accessed"] for t in item.get("tabs", []) if t.get("last_accessed")]
+        if accessed:
+            tab_age = time.age(max(accessed, key=time.str2dt))
+            item["seconds_since_tab_access"] = tab_age.total_seconds()
+
+        # NB: Rules see the item's metadata too, e.g. meta/triage/size.
+        info = item
+        meta = self._metadata.get(url)
+        if meta: info = {**item, "meta": meta}
+
+        score_value = 1
+        score_rules = []
+        for expression, consequence in self.rules:
+            # Try to apply the rule to this action item.
+            applies = evaluate(expression, info)
+            if not applies: continue  # Rule does not apply.
+
+            # The rule applies. Mark it as used.
+            if unused_rules is not None: unused_rules.discard(consequence)
+
+            # Consequences are of the form:
+            #
+            #   +3: next-release milestone
+            #   ^^  ^
+            #   ||  \-- description
+            #   |\----- score modification value
+            #   \------ operator (+, -, x, or /)
+            #
+            # So in the above example, the score should increase by 3.
+            #
+            # If the score modification value is X instead of a number,
+            # it is expected the rule application will return the number.
+            # For example:
+            #
+            #   issue/comments -> +X: number of comments
+            #
+            # The above rule should increase the score by the comment count.
+
+            op = consequence[0]
+            smv = consequence[1:consequence.index(":")]
+
+            if smv == "X":
+                # Score mod value is the rule evaluation result.
+                smv = float(applies)
+                # Replace X with the actual number, legibly rounded.
+                shown = f"{smv:.1f}".removesuffix(".0")
+                consequence = f"{op}{shown}{consequence[2:]}"
+            else:
+                # Score mod value is a constant declared in the consequence.
+                smv = float(smv)
+
+            # Now change the score using the operator and score modification value.
+            if op == '+': score_value += smv
+            elif op == '-': score_value = max(1, score_value - smv)
+            elif op == 'x': score_value *= smv
+            elif op == '/': score_value = max(1, score_value / smv)
+            else: raise RuntimeError(f"Invalid rule consequence: {consequence}")
+
+            # Record the consequence on this item's list of applied rules.
+            score_rules.append(consequence)
+
+        self._impact[url] = ImpactScore(score_value, score_rules)

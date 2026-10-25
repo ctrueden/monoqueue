@@ -14,7 +14,7 @@ The monoqueue command line tool.
 import sys
 from pprint import pprint
 
-from . import Monoqueue, ui
+from . import Monoqueue, agent, promote, ui
 from .lock import lock
 from .log import log, setup_logging
 
@@ -85,6 +85,61 @@ def cmd_ls(*args):
     return 0
 
 
+def cmd_triage(*args):
+    if len(args) == 0:
+        log.error("Please specify the URLs of action items to triage.")
+        return 3
+
+    mq = Monoqueue()
+    mq.load()
+    for url in args:
+        url = mq.normalize(url)
+        if mq.item(url) is None: log.warning("Not in the queue: %s", url)
+        log.info("Triaging %s...", url)
+        try:
+            result = agent.triage(mq, url, mq.section("agent"))
+        except Exception as e:
+            log.error("Cannot triage %s: %s", url, e)
+            continue
+        print(f"{url}\n  {result['size']}, {result['actor']}: {result['next_action']}\n  {result['summary']}")
+        mq.save(items_path=None)
+    return 0
+
+
+def cmd_promote(*args):
+    args = list(args)
+    options = {}
+    for flag in ("--repo", "--why"):
+        if flag in args:
+            i = args.index(flag)
+            options[flag] = args[i + 1]
+            del args[i:i + 2]
+    yes = "--yes" in args
+    if yes: args.remove("--yes")
+    if len(args) != 1:
+        log.error("Usage: mq promote <url> [--repo owner/name] [--why text] [--yes]")
+        return 3
+
+    mq = Monoqueue()
+    mq.load()
+    issue_url = promote.interact(mq, args[0], options.get("--why", ""),
+                                 options.get("--repo"), yes)
+    mq.save(items_path=None)
+    return 0 if issue_url else 1
+
+
+def cmd_link(*args):
+    if len(args) != 2:
+        log.error("Usage: mq link <url> <target-url>")
+        return 3
+
+    mq = Monoqueue()
+    mq.load()
+    print(mq.link(args[0], args[1]))
+    mq.save(items_path=None)
+    return 0
+
+
 def cmd_ui(*args):
     ui.main(*args)
     return 0
@@ -133,11 +188,14 @@ def main():
 Usage: mq <command> [<args>]
 
 Valid commands:
-  info - show detailed info about action items
-    ls - list action items by impact score
-    ui - launch the interactive monoqueue user interface
-    up - update action item data from linked sources (all, or those given);
-         waits up to 600 seconds for another update to finish (--wait N)
+   info - show detailed info about action items
+   link - link an action item into another (e.g. a tab into an issue)
+     ls - list action items by impact score
+promote - create a GitHub issue for an action item, and link it in
+ triage - have an agent estimate action items' size and next action
+     ui - launch the interactive monoqueue user interface
+     up - update action item data from linked sources (all, or those given);
+          waits up to 600 seconds for another update to finish (--wait N)
 """
 
     args = sys.argv[1:]
@@ -149,7 +207,10 @@ Valid commands:
     args = args[1:]
 
     if command == "info": return cmd_info(*args)
+    if command == "link": return cmd_link(*args)
     if command == "ls": return cmd_ls(*args)
+    if command == "promote": return cmd_promote(*args)
+    if command == "triage": return cmd_triage(*args)
     if command == "ui": return cmd_ui(*args)
     if command == "up": return cmd_up(*args)
 

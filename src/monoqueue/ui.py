@@ -12,13 +12,16 @@ A curses-based user interface to monoqueue.
 """
 
 import base64
+import contextlib
 import curses
 import os
 import re
+import subprocess
 import sys
 import webbrowser
+from pathlib import Path
 
-from . import Monoqueue, time
+from . import Monoqueue, agent, promote, time
 
 # A nice curses tutorial can be found at:
 # https://docs.python.org/3/howto/curses.html#curses-howto
@@ -50,6 +53,7 @@ class UI:
     def __init__(self, stdscr):
         self.mq = Monoqueue()
         self.mq.load()
+        self.metadata_mtime = _mtime(Monoqueue._DEFAULT_METADATA_PATH)
         self.stdscr = stdscr
         self.url = None
         self.index = None
@@ -101,7 +105,7 @@ class UI:
         self.draw_divider(row := row + 1)
         self.write(f"Action item {self.index + 1} of {self.count}", (row := row + 1), 0)
         self.write("", (row := row + 1), 0)
-        self.draw_option_line("(O)pen | (N)ext | (P)revious | Defer (1)(2)(3)... | (Q)uit")
+        self.draw_option_line("(O)pen (N)ext (P)rev | Defer (1)(2)(3)... | (T)riage (A)gent (I)ssue | (Q)uit")
         prompt_row = (row := row + 1)
         self.draw_divider(row := row + 1)
 
@@ -116,12 +120,26 @@ class UI:
         # Right column
         r_row = row
         r_col = 40
-        self.write(f"Impact: {impact.value}", (r_row := r_row + 1), r_col, c=C_SCORE)
+        self.write(f"Impact: {impact.value:.1f}", (r_row := r_row + 1), r_col, c=C_SCORE)
         for rule in impact.rules:
             self.write(f"* {rule}", (r_row := r_row + 1), r_col, c=C_SCORE)
 
-        # Body, if available
+        # Triage, links, and notes, if any
         row = max(l_row, r_row)
+        metadata = self.mq.metadata(self.url)
+        notes = []
+        triaged = metadata.get("triage")
+        if triaged:
+            notes.append(f"Size {triaged['size']} ({agent.SIZES.get(triaged['size'], '?')}); "
+                         f"next action ({triaged['actor']}): {triaged['next_action']}")
+        if metadata.get("note"): notes.append(f"Note: {metadata['note']}")
+        if metadata.get("links"): notes.append(f"Links: {', '.join(metadata['links'])}")
+        if notes:
+            self.draw_divider(row := row + 1)
+            for line in UI.split_lines("\n".join(notes), 0):
+                self.write(line, (row := row + 1), 0, c=C_HILITE)
+
+        # Body, if available
         self.draw_divider(row := row + 1)
 
         if body:
@@ -215,7 +233,10 @@ class UI:
         sys.exit(exit_code)
 
     def readkey(self):
-        key = self.stdscr.getkey()
+        try:
+            key = self.stdscr.getkey()
+        except curses.error:
+            return None  # No key pressed before the timeout.
         self.write(key)
         self.refresh()
         return key
@@ -226,6 +247,9 @@ class UI:
         elif key in "nN": self.jump(self.index + 1)
         elif key in "pP": self.jump(self.index - 1)
         elif key in "qQ": self.quit()
+        elif key in "tT": self.triage()
+        elif key in "aA": self.work()
+        elif key in "iI": self.promote()
         elif key in "123456789": self.defer(ord(key) - ord('0'))
         elif key in "jJ" or code == K_DN: self.scroll(1)
         elif key in "kK" or code == K_UP: self.scroll(-1)
@@ -249,6 +273,85 @@ class UI:
         sys.stdout.flush()
         self.message = "Copied URL to clipboard"
 
+    def triage(self):
+        """
+        Triage the item in the background; the result appears once done.
+        """
+        log_path = Path("~/.cache/monoqueue/agent.log").expanduser()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a") as log_file:
+            subprocess.Popen(
+                [sys.executable, "-m", "monoqueue", "triage", self.url],
+                stdin=subprocess.DEVNULL, stdout=log_file, stderr=log_file,
+                start_new_session=True,
+            )
+        self.message = "Triaging in the background; the result will appear here"
+
+    def work(self):
+        """
+        Work on the item with an agent: in a new tmux window, if in tmux,
+        so that the queue remains at hand; or else in this terminal.
+        """
+        args, cwd = agent.work_command(self.mq, self.url, self.mq.section("agent"))
+        if os.environ.get("TMUX"):
+            window = ["tmux", "new-window", "-n", "agent"]
+            if cwd: window += ["-c", str(cwd)]
+            subprocess.run(window + args, check=False)
+            self.message = "Opened an agent in a new tmux window"
+            return
+        with self.suspended():
+            subprocess.run(args, cwd=cwd, check=False)
+
+    def promote(self):
+        """
+        Promote the item to a GitHub issue, on the terminal, since that
+        involves reading and perhaps editing the drafted issue.
+        """
+        try:
+            promote.check_promotable(self.mq, self.url)
+        except ValueError as e:
+            self.message = f"Cannot promote: {e}"
+            return
+        with self.suspended():
+            print(f"{self.url}\n{self.mq.item(self.url).get('title')}\n")
+            try:
+                why = input("Why do you care about this? (optional) ").strip()
+                issue_url = promote.interact(self.mq, self.url, why)
+            except (Exception, KeyboardInterrupt) as e:
+                issue_url = None
+                print(f"\nNot promoted: {e}")
+            self.mq.save(items_path=None)
+            input("\nPress Enter to return to the queue...")
+        if issue_url:
+            self.jump(self.mq.urls().index(issue_url) if issue_url in self.mq.urls() else self.index)
+
+    @contextlib.contextmanager
+    def suspended(self):
+        """
+        Leave curses mode temporarily, e.g. to run a terminal program.
+        """
+        curses.def_prog_mode()
+        curses.endwin()
+        try:
+            yield
+        finally:
+            curses.reset_prog_mode()
+            self.stdscr.clear()
+            self.refresh()
+
+    def check_metadata(self):
+        """
+        Pick up metadata changed by other processes, e.g. a triage.
+
+        :return:
+            True if the metadata changed.
+        """
+        mtime = _mtime(Monoqueue._DEFAULT_METADATA_PATH)
+        if mtime == self.metadata_mtime: return False
+        self.metadata_mtime = mtime
+        self.mq.reload_metadata()
+        return True
+
     def loop(self):
         curses.init_pair(C_OPTION, curses.COLOR_RED, curses.COLOR_BLACK)
         curses.init_pair(C_HILITE, curses.COLOR_YELLOW, curses.COLOR_BLACK)
@@ -257,11 +360,16 @@ class UI:
         curses.init_pair(C_DATES, curses.COLOR_BLUE, curses.COLOR_BLACK)
         curses.init_pair(C_SCORE, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
 
+        # NB: Wait for keys only briefly, to notice metadata changes.
+        self.stdscr.timeout(2000)
+        redraw = True
         while True:
-            self.draw_screen()
-            self.refresh()
+            if self.check_metadata() or redraw:
+                self.draw_screen()
+                self.refresh()
             key = self.readkey()
-            self.do_operation(key)
+            redraw = key is not None
+            if redraw: self.do_operation(key)
 
     def jump(self, index):
         urls = self.mq.urls()
@@ -283,6 +391,13 @@ class UI:
     def scroll(self, amount):
         self.scroll_offset += amount
         if self.scroll_offset < 0: self.scroll_offset = 0
+
+def _mtime(path):
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return None
+
 
 def _has_display():
     if sys.platform in ("darwin", "win32"): return True
