@@ -317,6 +317,10 @@ class UI:
         if os.environ.get("TMUX"):
             window = ["tmux", "new-window", "-n", name]
             if cwd: window += ["-c", str(cwd)]
+            # NB: The window gets the tmux server's environment, not ours,
+            # so pass along our editor, for editing prompts.
+            for var in ("VISUAL", "EDITOR"):
+                if os.environ.get(var): window += ["-e", f"{var}={os.environ[var]}"]
             subprocess.run(window + args, check=False)
             self.message = "Opened an agent in a new tmux window"
             return
