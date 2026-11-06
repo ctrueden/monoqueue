@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -13,7 +12,6 @@ from monoqueue.urls import normalize
 
 
 class TestUrls(unittest.TestCase):
-
     def test_fragment_and_tracking(self):
         self.assertEqual(
             "https://github.com/scijava/pombast/issues/7",
@@ -42,7 +40,9 @@ class TestUrls(unittest.TestCase):
     def test_discourse_post_kept(self):
         post = "https://forum.image.sc/t/123/4"
         self.assertEqual(post, normalize("https://forum.image.sc/t/my-topic/123/4"))
-        self.assertEqual(post, normalize("https://forum.image.sc/t/renamed-topic/123/4"))
+        self.assertEqual(
+            post, normalize("https://forum.image.sc/t/renamed-topic/123/4")
+        )
         self.assertEqual(post, normalize(post))
 
     def test_discourse_hosts_only(self):
@@ -58,5 +58,5 @@ class TestUrls(unittest.TestCase):
         self.assertEqual(url, normalize(url))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

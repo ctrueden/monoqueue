@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -48,32 +47,40 @@ def normalize(url: str, discourse_hosts: Iterable[str] = DISCOURSE_HOSTS) -> str
     """
     parts = urlsplit(url.strip())
     scheme = parts.scheme.lower()
-    if scheme not in ("http", "https"): return url
+    if scheme not in ("http", "https"):
+        return url
 
     host = parts.netloc.lower()
-    query = urlencode([
-        (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
-        if not _TRACKING_PARAM.match(k)
-    ])
+    query = urlencode(
+        [
+            (k, v)
+            for k, v in parse_qsl(parts.query, keep_blank_values=True)
+            if not _TRACKING_PARAM.match(k)
+        ]
+    )
     path = parts.path
     if host in discourse_hosts:
         path = _discourse_path(path)
     fragment = parts.fragment if parts.fragment.startswith("/") else ""
     # NB: Web apps routing via fragments can be fussy about the path.
-    if len(path) > 1 and not fragment: path = path.rstrip("/")
+    if len(path) > 1 and not fragment:
+        path = path.rstrip("/")
 
     return urlunsplit((scheme, host, path, query, fragment))
 
 
 def _discourse_path(path: str) -> str:
     segments = [s for s in path.split("/") if s]
-    if len(segments) < 2 or segments[0] != "t": return path
+    if len(segments) < 2 or segments[0] != "t":
+        return path
     segments = segments[1:]
 
     # Drop the slug, if any. NB: A purely numeric slug would be mistaken
     # for a topic ID, but Discourse slugs are rarely only digits.
-    if not segments[0].isdigit(): segments = segments[1:]
-    if not segments or not all(s.isdigit() for s in segments[:2]): return path
+    if not segments[0].isdigit():
+        segments = segments[1:]
+    if not segments or not all(s.isdigit() for s in segments[:2]):
+        return path
 
     topic = segments[0]
     post = segments[1] if len(segments) > 1 else "1"

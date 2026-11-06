@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -42,16 +41,18 @@ def update(mq, config):
     search.download(query)
 
     for topic in search.topics:
-        mq.put(f"{baseurl}/t/{topic['id']}", {
-            "title": topic["title"],
-            "created": topic["created_at"],
-            "updated": topic["last_posted_at"],
-            "topic": topic
-        })
+        mq.put(
+            f"{baseurl}/t/{topic['id']}",
+            {
+                "title": topic["title"],
+                "created": topic["created_at"],
+                "updated": topic["last_posted_at"],
+                "topic": topic,
+            },
+        )
 
 
 class DiscourseSearch:
-
     def __init__(self, baseurl, items=None, username=None, key=None):
         self._baseurl = baseurl
         self._username = username
@@ -73,7 +74,7 @@ class DiscourseSearch:
         """
         Save search data to the given JSON file.
         """
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             return json.dump(self.topics, f, sort_keys=True, indent=4)
 
     def download(self, query: str):
@@ -88,15 +89,19 @@ class DiscourseSearch:
         page = 1
         for _ in range(self._max_requests):
             more = self._download_page(url, query, page)
-            if self._progress: self._progress(more)
-            if page >= page_limit or not more: break
+            if self._progress:
+                self._progress(more)
+            if page >= page_limit or not more:
+                break
             page += 1
             time.sleep(self._delay_per_request)
 
     def _download_page(self, url: str, query: str, page: int):
-        headers = {'User-Agent': 'monoqueue'}
-        if self._key: headers['Api-Key'] = f"{self._key}"
-        if self._username: headers['Api-Username'] = f"{self._username}"
+        headers = {"User-Agent": "monoqueue"}
+        if self._key:
+            headers["Api-Key"] = f"{self._key}"
+        if self._username:
+            headers["Api-Username"] = f"{self._username}"
 
         log.debug("Downloading %s page %d", url, page)
         params = {"q": query, "page": page}
@@ -104,7 +109,7 @@ class DiscourseSearch:
         response.raise_for_status()
         result = response.json()
         if "topics" in result:
-            self.topics.extend(result['topics'])
+            self.topics.extend(result["topics"])
 
         gsr = result.get("grouped_search_result", {})
-        return gsr.get('more_full_page_results', False)
+        return gsr.get("more_full_page_results", False)

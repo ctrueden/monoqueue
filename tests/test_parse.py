@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -8,30 +7,20 @@
 # ------------------------------------------------------------------------
 
 import unittest
+from typing import ClassVar
 
 from monoqueue import parse
 
 
 class TestParse(unittest.TestCase):
-
-    data = {
+    data: ClassVar[dict] = {
         "greetings": {"aloha", "hello", "salutations", "felicitations"},
         "farewells": {"goodbye", "ciao", "see ya", "aloha"},
         "people": [
-            {
-                "name": "Goofus",
-                "age": 13
-            },
-            {
-                "name": "Gallant",
-                "age": 14
-            },
+            {"name": "Goofus", "age": 13},
+            {"name": "Gallant", "age": 14},
         ],
-        "outer": {
-            "inner": {
-                "innermost": 44
-            }
-        }
+        "outer": {"inner": {"innermost": 44}},
     }
 
     # def test_any(self):
@@ -44,8 +33,14 @@ class TestParse(unittest.TestCase):
     #     self.assertFalse(parse.evaluate("all(age > 13 for age in people/age)", self.data))
 
     def test_binary_op(self):
-        self.assertEqual(["Goofus", "Gallant", 13, 14], parse.evaluate("people/name + people/age", self.data))
-        self.assertEqual({"goodbye", "ciao", "see ya"}, parse.evaluate("farewells - greetings", self.data))
+        self.assertEqual(
+            ["Goofus", "Gallant", 13, 14],
+            parse.evaluate("people/name + people/age", self.data),
+        )
+        self.assertEqual(
+            {"goodbye", "ciao", "see ya"},
+            parse.evaluate("farewells - greetings", self.data),
+        )
         self.assertEqual({"aloha"}, parse.evaluate("greetings & farewells", self.data))
 
     def test_inclusion(self):
@@ -73,8 +68,10 @@ class TestParse(unittest.TestCase):
 
     def test_slash_access(self):
         self.assertEqual(44, parse.evaluate("outer/inner/innermost", self.data))
-        self.assertEqual(["Goofus", "Gallant"], parse.evaluate("people/name", self.data))
+        self.assertEqual(
+            ["Goofus", "Gallant"], parse.evaluate("people/name", self.data)
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

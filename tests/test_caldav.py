@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -73,14 +72,21 @@ END:VTODO
 
 
 def _ics(*todos):
-    return "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test\n" + TIMEZONE + "".join(todos) + "END:VCALENDAR\n"
+    return (
+        "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test\n"
+        + TIMEZONE
+        + "".join(todos)
+        + "END:VCALENDAR\n"
+    )
 
 
 def _multistatus(*responses):
-    return ('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" '
-            'xmlns:c="urn:ietf:params:xml:ns:caldav">'
-            + "".join(f"<d:response>{r}</d:response>" for r in responses)
-            + "</d:multistatus>")
+    return (
+        '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" '
+        'xmlns:c="urn:ietf:params:xml:ns:caldav">'
+        + "".join(f"<d:response>{r}</d:response>" for r in responses)
+        + "</d:multistatus>"
+    )
 
 
 def _response(href, prop):
@@ -100,15 +106,19 @@ def _calendar(name, displayname, *components):
 def _fake_server(method, url, data=None, headers=None, timeout=None):
     body = data.decode()
     if method == "PROPFIND" and url == BASE:
-        xml = _multistatus(_response(
-            "/remote.php/dav/",
-            "<d:current-user-principal><d:href>/remote.php/dav/principals/users/curtis/</d:href></d:current-user-principal>",
-        ))
+        xml = _multistatus(
+            _response(
+                "/remote.php/dav/",
+                "<d:current-user-principal><d:href>/remote.php/dav/principals/users/curtis/</d:href></d:current-user-principal>",
+            )
+        )
     elif method == "PROPFIND" and "calendar-home-set" in body:
-        xml = _multistatus(_response(
-            "/remote.php/dav/principals/users/curtis/",
-            f"<c:calendar-home-set><d:href>{HOME}</d:href></c:calendar-home-set>",
-        ))
+        xml = _multistatus(
+            _response(
+                "/remote.php/dav/principals/users/curtis/",
+                f"<c:calendar-home-set><d:href>{HOME}</d:href></c:calendar-home-set>",
+            )
+        )
     elif method == "PROPFIND" and url.endswith(HOME):
         xml = _multistatus(
             _response(HOME, "<d:resourcetype><d:collection/></d:resourcetype>"),
@@ -117,10 +127,15 @@ def _fake_server(method, url, data=None, headers=None, timeout=None):
             _calendar("contact_birthdays", "Birthdays", "VEVENT"),
         )
     elif method == "REPORT" and url.endswith(f"{HOME}work/"):
-        xml = _multistatus(*(
-            _response(f"{HOME}work/{name}", f"<c:calendar-data>{_ics(todo)}</c:calendar-data>")
-            for name, todo in TASKS.items()
-        ))
+        xml = _multistatus(
+            *(
+                _response(
+                    f"{HOME}work/{name}",
+                    f"<c:calendar-data>{_ics(todo)}</c:calendar-data>",
+                )
+                for name, todo in TASKS.items()
+            )
+        )
     elif method == "REPORT":
         xml = _multistatus()
     else:
@@ -131,7 +146,6 @@ def _fake_server(method, url, data=None, headers=None, timeout=None):
 
 
 class TestCalDAV(unittest.TestCase):
-
     def setUp(self):
         patch = mock.patch("requests.Session.request", side_effect=_fake_server)
         self.request = patch.start()
@@ -141,8 +155,10 @@ class TestCalDAV(unittest.TestCase):
         client = caldav.CalDAV(BASE.rstrip("/"), "curtis", "secret")
         lists = client.task_lists()
         self.assertEqual(
-            [("Personal", f"https://cloud.example.org{HOME}personal/"),
-             ("Work", f"https://cloud.example.org{HOME}work/")],
+            [
+                ("Personal", f"https://cloud.example.org{HOME}personal/"),
+                ("Work", f"https://cloud.example.org{HOME}work/"),
+            ],
             [(c["name"], c["url"]) for c in lists],
         )
 
@@ -156,7 +172,10 @@ class TestCalDAV(unittest.TestCase):
         self.assertEqual(1, pr["priority"])
         self.assertEqual(["review", "appose"], pr["categories"])
         self.assertEqual(
-            ["https://github.com/apposed/appose/pull/42", "https://forum.image.sc/t/123/4"],
+            [
+                "https://github.com/apposed/appose/pull/42",
+                "https://forum.image.sc/t/123/4",
+            ],
             pr["links"],
         )
         self.assertEqual("2026-10-20T12:00:00Z", pr["created"])
@@ -170,11 +189,17 @@ class TestCalDAV(unittest.TestCase):
 
     def test_update(self):
         mq = Monoqueue({"rules": {}})
-        caldav.update(mq, {"url": BASE, "username": "curtis", "password": "secret", "lists": "Work"})
+        caldav.update(
+            mq,
+            {"url": BASE, "username": "curtis", "password": "secret", "lists": "Work"},
+        )
 
         # Completed and cancelled tasks are skipped.
         self.assertEqual(
-            {f"https://cloud.example.org{HOME}work/{name}" for name in ("review.ics", "renew-cert.ics")},
+            {
+                f"https://cloud.example.org{HOME}work/{name}"
+                for name in ("review.ics", "renew-cert.ics")
+            },
             set(mq.items),
         )
         item = mq.item(f"https://cloud.example.org{HOME}work/review.ics")
@@ -183,7 +208,9 @@ class TestCalDAV(unittest.TestCase):
         self.assertEqual("Work", item["task"]["list"])
 
         # Only the Work list was queried for tasks.
-        reports = [c.args[1] for c in self.request.call_args_list if c.args[0] == "REPORT"]
+        reports = [
+            c.args[1] for c in self.request.call_args_list if c.args[0] == "REPORT"
+        ]
         self.assertEqual([f"https://cloud.example.org{HOME}work/"], reports)
 
         mq._score()
@@ -191,10 +218,13 @@ class TestCalDAV(unittest.TestCase):
 
     def test_link_template(self):
         mq = Monoqueue({"rules": {}})
-        caldav.update(mq, {
-            "url": BASE,
-            "link": "https://cloud.example.org/apps/tasks/calendars/{calendar}/tasks/{task}",
-        })
+        caldav.update(
+            mq,
+            {
+                "url": BASE,
+                "link": "https://cloud.example.org/apps/tasks/calendars/{calendar}/tasks/{task}",
+            },
+        )
         self.assertIn(
             "https://cloud.example.org/apps/tasks/calendars/work/tasks/review.ics",
             mq.items,
@@ -210,5 +240,5 @@ class TestCalDAV(unittest.TestCase):
             caldav._verify("false  # TEMP: inline comments are not comments")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -49,6 +48,7 @@ K_CTRL_D = (4,)
 K_CTRL_F = (6,)
 K_CTRL_U = (21,)
 
+
 class UI:
     def __init__(self, stdscr):
         self.mq = Monoqueue()
@@ -77,7 +77,8 @@ class UI:
         directly to the terminal, behind curses's back. The rewritten text is
         identical, so curses's idea of the screen remains accurate.
         """
-        if not self.link: return
+        if not self.link:
+            return
         y, x, text = self.link
         sys.stdout.write(
             "\0337"  # Save cursor position and attributes.
@@ -95,7 +96,9 @@ class UI:
         updated = item.get("updated")
         impact = self.mq.impact(self.url)
         issue = item.get("issue")
-        body = UI.split_lines(issue.get("body") if issue else item.get("description"), 0)
+        body = UI.split_lines(
+            issue.get("body") if issue else item.get("description"), 0
+        )
 
         row = -1
         self.write(self.url, (row := row + 1), c=C_URL)
@@ -106,7 +109,9 @@ class UI:
         self.draw_divider(row := row + 1)
         self.write(f"Action item {self.index + 1} of {self.count}", (row := row + 1), 0)
         self.write("", (row := row + 1), 0)
-        self.draw_option_line("(O)pen (N)ext (P)rev | Defer (1)(2)(3)... | (T)riage (A)gent (I)ssue (R)ules | (Q)uit")
+        self.draw_option_line(
+            "(O)pen (N)ext (P)rev | Defer (1)(2)(3)... | (T)riage (A)gent (I)ssue (R)ules | (Q)uit"
+        )
         prompt_row = (row := row + 1)
         self.draw_divider(row := row + 1)
 
@@ -116,12 +121,16 @@ class UI:
         self.write(f"Created: {created or '?'}", (l_row := l_row + 1), l_col, c=C_DATES)
         self.write(f"Updated: {updated or '?'}", (l_row := l_row + 1), l_col, c=C_DATES)
         if updated:
-            self.write(f"Age: {time.age(updated)}", (l_row := l_row + 1), l_col, c=C_DATES)
+            self.write(
+                f"Age: {time.age(updated)}", (l_row := l_row + 1), l_col, c=C_DATES
+            )
 
         # Right column
         r_row = row
         r_col = 40
-        self.write(f"Impact: {impact.value:.1f}", (r_row := r_row + 1), r_col, c=C_SCORE)
+        self.write(
+            f"Impact: {impact.value:.1f}", (r_row := r_row + 1), r_col, c=C_SCORE
+        )
         for rule in impact.rules:
             self.write(f"* {rule}", (r_row := r_row + 1), r_col, c=C_SCORE)
 
@@ -131,10 +140,14 @@ class UI:
         notes = []
         triaged = metadata.get("triage")
         if triaged:
-            notes.append(f"Size {triaged['size']} ({agent.SIZES.get(triaged['size'], '?')}); "
-                         f"next action ({triaged['actor']}): {triaged['next_action']}")
-        if metadata.get("note"): notes.append(f"Note: {metadata['note']}")
-        if metadata.get("links"): notes.append(f"Links: {', '.join(metadata['links'])}")
+            notes.append(
+                f"Size {triaged['size']} ({agent.SIZES.get(triaged['size'], '?')}); "
+                f"next action ({triaged['actor']}): {triaged['next_action']}"
+            )
+        if metadata.get("note"):
+            notes.append(f"Note: {metadata['note']}")
+        if metadata.get("links"):
+            notes.append(f"Links: {', '.join(metadata['links'])}")
         if notes:
             self.draw_divider(row := row + 1)
             for line in UI.split_lines("\n".join(notes), 0):
@@ -148,7 +161,8 @@ class UI:
             self.scroll_offset = max(0, min(self.scroll_offset, max_offset))
             for i in range(self.scroll_offset, len(body)):
                 self.write(body[i], (row := row + 1), 0)
-                if row >= curses.LINES: break
+                if row >= curses.LINES:
+                    break
 
         if self.message:
             self.write(self.message, prompt_row, 4, c=C_HILITE)
@@ -168,7 +182,8 @@ class UI:
 
     @staticmethod
     def trunc_line(line, max_len):
-        if len(line) <= max_len: return line
+        if len(line) <= max_len:
+            return line
         end = max_len - 3
         return "" if end < 0 else line[:end] + "..."
 
@@ -178,12 +193,14 @@ class UI:
         Split up a multi-line message block, intelligently wrapping at words.
         """
         lines = []
-        if s is None: return lines
+        if s is None:
+            return lines
 
         max_len = curses.COLS - x
         code = False
         for line in re.split("\r\n|\n", s.replace("\t", "    ")):
-            if line.startswith("```"): code = not code
+            if line.startswith("```"):
+                code = not code
             tack = True
             while len(line) > max_len:
                 if code:
@@ -193,13 +210,16 @@ class UI:
                 else:
                     # Split up long lines on words.
                     end = line[:max_len].rfind(" ")
-                    if end < 0: end = line.find(" ", max_len)
-                    if end < 0: end = len(line)
+                    if end < 0:
+                        end = line.find(" ", max_len)
+                    if end < 0:
+                        end = len(line)
 
                 lines.append(line[:end])
-                line = line[end + 1:]
+                line = line[end + 1 :]
 
-            if tack: lines.append(line)
+            if tack:
+                lines.append(line)
 
         return lines
 
@@ -223,12 +243,10 @@ class UI:
             raise ValueError(f"Invalid coordinates: {y=}, {x=}")
 
         s = UI.trunc_line(s, curses.COLS - x)
-        try:
+        # Every so often, curses crashes while resizing the terminal.
+        # Ignoring these errors seems to behave just fine, so we do.
+        with contextlib.suppress(curses.error):
             self.stdscr.addstr(y, x, s, curses.color_pair(c))
-        except:
-            # Every so often, curses crashes while resizing the terminal.
-            # Ignoring these errors seems to behave just fine, so we do.
-            pass
 
     def quit(self, exit_code=0):
         sys.exit(exit_code)
@@ -244,22 +262,38 @@ class UI:
 
     def do_operation(self, key: str):
         code = tuple(ord(c) for c in key)
-        if key in "oO": self.open()
-        elif key in "nN": self.jump(self.index + 1)
-        elif key in "pP": self.jump(self.index - 1)
-        elif key in "qQ": self.quit()
-        elif key in "tT": self.triage()
-        elif key == "a": self.work()
-        elif key == "A": self.work(edit=True)
-        elif key in "iI": self.promote()
-        elif key in "rR": self.tune()
-        elif key in "123456789": self.defer(ord(key) - ord('0'))
-        elif key in "jJ" or code == K_DN: self.scroll(1)
-        elif key in "kK" or code == K_UP: self.scroll(-1)
-        elif code in (K_PGDN, K_CTRL_D, K_CTRL_F): self.scroll(curses.LINES // 2)
-        elif code in (K_PGUP, K_CTRL_U, K_CTRL_B): self.scroll(-curses.LINES // 2)
-        elif code == K_HOME: self.scroll(-2**30)
-        elif key == "G" or code == K_END: self.scroll(2**30)
+        if key in "oO":
+            self.open()
+        elif key in "nN":
+            self.jump(self.index + 1)
+        elif key in "pP":
+            self.jump(self.index - 1)
+        elif key in "qQ":
+            self.quit()
+        elif key in "tT":
+            self.triage()
+        elif key == "a":
+            self.work()
+        elif key == "A":
+            self.work(edit=True)
+        elif key in "iI":
+            self.promote()
+        elif key in "rR":
+            self.tune()
+        elif key in "123456789":
+            self.defer(ord(key) - ord("0"))
+        elif key in "jJ" or code == K_DN:
+            self.scroll(1)
+        elif key in "kK" or code == K_UP:
+            self.scroll(-1)
+        elif code in (K_PGDN, K_CTRL_D, K_CTRL_F):
+            self.scroll(curses.LINES // 2)
+        elif code in (K_PGUP, K_CTRL_U, K_CTRL_B):
+            self.scroll(-curses.LINES // 2)
+        elif code == K_HOME:
+            self.scroll(-(2**30))
+        elif key == "G" or code == K_END:
+            self.scroll(2**30)
         return True
 
     def open(self):
@@ -286,7 +320,9 @@ class UI:
         with open(log_path, "a") as log_file:
             subprocess.Popen(
                 [sys.executable, "-m", "monoqueue", "triage", self.url],
-                stdin=subprocess.DEVNULL, stdout=log_file, stderr=log_file,
+                stdin=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=log_file,
                 start_new_session=True,
             )
         self.message = "Triaging in the background; the result will appear here"
@@ -299,7 +335,8 @@ class UI:
             Whether to edit the agent's prompt first.
         """
         args, cwd = agent.work_command(self.mq, self.url, self.mq.config.action("work"))
-        if edit: args = agent.edit_first(args)
+        if edit:
+            args = agent.edit_first(args)
         self.run_agent(args, cwd, "agent")
 
     def tune(self):
@@ -317,11 +354,13 @@ class UI:
         """
         if os.environ.get("TMUX"):
             window = ["tmux", "new-window", "-n", name]
-            if cwd: window += ["-c", str(cwd)]
+            if cwd:
+                window += ["-c", str(cwd)]
             # NB: The window gets the tmux server's environment, not ours,
             # so pass along our editor, for editing prompts.
             for var in ("VISUAL", "EDITOR"):
-                if os.environ.get(var): window += ["-e", f"{var}={os.environ[var]}"]
+                if os.environ.get(var):
+                    window += ["-e", f"{var}={os.environ[var]}"]
             subprocess.run(window + args, check=False)
             self.message = "Opened an agent in a new tmux window"
             return
@@ -343,13 +382,17 @@ class UI:
             try:
                 why = input("Why do you care about this? (optional) ").strip()
                 issue_url = promote.interact(self.mq, self.url, why)
-            except (Exception, KeyboardInterrupt) as e:
+            except (Exception, KeyboardInterrupt) as e:  # noqa: BLE001
                 issue_url = None
                 print(f"\nNot promoted: {e}")
             self.mq.save(items_path=None)
             input("\nPress Enter to return to the queue...")
         if issue_url:
-            self.jump(self.mq.urls().index(issue_url) if issue_url in self.mq.urls() else self.index)
+            self.jump(
+                self.mq.urls().index(issue_url)
+                if issue_url in self.mq.urls()
+                else self.index
+            )
 
     @contextlib.contextmanager
     def suspended(self):
@@ -373,15 +416,18 @@ class UI:
             True if the rules changed.
         """
         mtime = _mtime(self.mq.config.rules_path)
-        if mtime == self.rules_mtime: return False
+        if mtime == self.rules_mtime:
+            return False
         self.rules_mtime = mtime
         try:
             self.mq.reload_rules()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - keep running on broken rules
             self.message = f"Cannot reload rules: {e}"
             return True
         self.message = "Reloaded the rules"
-        self.jump(self.mq.urls().index(self.url) if self.url in self.mq.urls() else self.index)
+        self.jump(
+            self.mq.urls().index(self.url) if self.url in self.mq.urls() else self.index
+        )
         return True
 
     def check_metadata(self):
@@ -392,7 +438,8 @@ class UI:
             True if the metadata changed.
         """
         mtime = _mtime(Monoqueue._DEFAULT_METADATA_PATH)
-        if mtime == self.metadata_mtime: return False
+        if mtime == self.metadata_mtime:
+            return False
         self.metadata_mtime = mtime
         self.mq.reload_metadata()
         return True
@@ -414,7 +461,8 @@ class UI:
                 self.refresh()
             key = self.readkey()
             redraw = key is not None
-            if redraw: self.do_operation(key)
+            if redraw:
+                self.do_operation(key)
 
     def jump(self, index):
         urls = self.mq.urls()
@@ -435,10 +483,12 @@ class UI:
 
     def scroll(self, amount):
         self.scroll_offset += amount
-        if self.scroll_offset < 0: self.scroll_offset = 0
+        self.scroll_offset = max(self.scroll_offset, 0)
+
 
 def _mtime(path):
-    if path is None: return None
+    if path is None:
+        return None
     try:
         return path.stat().st_mtime
     except OSError:
@@ -446,7 +496,8 @@ def _mtime(path):
 
 
 def _has_display():
-    if sys.platform in ("darwin", "win32"): return True
+    if sys.platform in ("darwin", "win32"):
+        return True
     return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 

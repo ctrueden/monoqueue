@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -29,12 +28,15 @@ from .log import log
 
 def update(mq, config):
     for bookmark in bookmarks(config["folder"]):
-        mq.put(bookmark["url"], {
-            "title": bookmark["title"],
-            "created": bookmark["dateAdded"],
-            "updated": bookmark["lastModified"],
-            "bookmark": bookmark
-        })
+        mq.put(
+            bookmark["url"],
+            {
+                "title": bookmark["title"],
+                "created": bookmark["dateAdded"],
+                "updated": bookmark["lastModified"],
+                "bookmark": bookmark,
+            },
+        )
 
 
 _PROFILE_PARENTS = [
@@ -71,9 +73,10 @@ def bookmarks(folder_name=None):
         log.warning("No Firefox sqlite DBs found!")
         return results
 
-    tf = tempfile.NamedTemporaryFile(delete=False, prefix="firefox", suffix=".sqlite")
-    temp_db_path = tf.name
-    tf.close()
+    with tempfile.NamedTemporaryFile(
+        delete=False, prefix="firefox", suffix=".sqlite"
+    ) as tf:
+        temp_db_path = tf.name
 
     for db in places_dbs:
         # NB: make a copy to avoid locked DB in case Firefox is open.
@@ -88,7 +91,7 @@ def bookmarks(folder_name=None):
                 where type = 2 and title = '{folder_name}';
                 """)
 
-            ids = ", ".join(str(folder_id) for folder_id, in folder_ids)
+            ids = ", ".join(str(folder_id) for (folder_id,) in folder_ids)
             if len(ids) == 0:
                 continue
 
@@ -105,12 +108,14 @@ def bookmarks(folder_name=None):
         # Test this more, and/or read. What is the separate recently deleted bookmarks table for?
 
         for title, url, date_added, last_modified in items:
-            results.append({
-                "title": title,
-                "url": url,
-                "dateAdded": time.string(date_added // 1000000),
-                "lastModified": time.string(last_modified // 1000000),
-            })
+            results.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "dateAdded": time.string(date_added // 1000000),
+                    "lastModified": time.string(last_modified // 1000000),
+                }
+            )
 
         cx.close()
 
@@ -132,7 +137,9 @@ def update_tabs(mq, config):
         for pattern in config.get("exclude", "").splitlines()
         if pattern.strip()
     ]
-    max_device_age = 86400 * float(config.get("max_device_age_days", DEFAULT_MAX_DEVICE_AGE_DAYS))
+    max_device_age = 86400 * float(
+        config.get("max_device_age_days", DEFAULT_MAX_DEVICE_AGE_DAYS)
+    )
 
     # Collect the tabs per URL, across devices.
     tabs = {}
@@ -142,16 +149,20 @@ def update_tabs(mq, config):
             continue
         for tab in info["tabs"]:
             url = mq.normalize(tab["url"])
-            if any(pattern.search(url) for pattern in excludes): continue
+            if any(pattern.search(url) for pattern in excludes):
+                continue
             entry = tabs.setdefault(url, {"title": tab.get("title"), "tabs": []})
-            entry["tabs"].append({
-                "device": device,
-                "last_accessed": tab.get("last_accessed"),
-            })
+            entry["tabs"].append(
+                {
+                    "device": device,
+                    "last_accessed": tab.get("last_accessed"),
+                }
+            )
 
     for url, entry in tabs.items():
         data = {"tabs": entry["tabs"]}
-        if entry["title"]: data["title"] = entry["title"]
+        if entry["title"]:
+            data["title"] = entry["title"]
         mq.put(url, data)
 
 
@@ -181,11 +192,17 @@ def snapshot():
 
     for profile in {f.parent for f in profile_files("prefs.js")}:
         local = _session_tabs(profile)
-        if local: add(host, *local)
+        if local:
+            add(host, *local)
         for device, seen, tabs in _synced_tabs(profile):
-            if device != host: add(device, seen, tabs)
+            if device != host:
+                add(device, seen, tabs)
 
-    return {"generated": time.string(int(time.now().timestamp())), "host": host, "devices": devices}
+    return {
+        "generated": time.string(int(time.now().timestamp())),
+        "host": host,
+        "devices": devices,
+    }
 
 
 def _session_tabs(profile):
@@ -198,13 +215,15 @@ def _session_tabs(profile):
         (seen, tabs) tuple, or None if there is no session store.
     """
     candidates = [
-        p for p in (
+        p
+        for p in (
             profile / "sessionstore.jsonlz4",
             profile / "sessionstore-backups" / "recovery.jsonlz4",
         )
         if p.exists()
     ]
-    if not candidates: return None
+    if not candidates:
+        return None
     path = max(candidates, key=lambda p: p.stat().st_mtime)
 
     try:
@@ -217,17 +236,24 @@ def _session_tabs(profile):
     for window in session.get("windows", []):
         for tab in window.get("tabs", []):
             # Pinned tabs are fixtures (mail, calendar), not action items.
-            if tab.get("pinned"): continue
+            if tab.get("pinned"):
+                continue
             entries = tab.get("entries", [])
             index = tab.get("index", len(entries))
-            if not entries or not 1 <= index <= len(entries): continue
+            if not entries or not 1 <= index <= len(entries):
+                continue
             entry = entries[index - 1]
-            if not entry.get("url", "").startswith(("http://", "https://")): continue
-            tabs.append({
-                "url": entry["url"],
-                "title": entry.get("title"),
-                "last_accessed": time.string(tab["lastAccessed"] // 1000) if tab.get("lastAccessed") else None,
-            })
+            if not entry.get("url", "").startswith(("http://", "https://")):
+                continue
+            tabs.append(
+                {
+                    "url": entry["url"],
+                    "title": entry.get("title"),
+                    "last_accessed": time.string(tab["lastAccessed"] // 1000)
+                    if tab.get("lastAccessed")
+                    else None,
+                }
+            )
 
     return time.string(int(path.stat().st_mtime)), tabs
 
@@ -240,7 +266,8 @@ def _synced_tabs(profile):
         List of (device, seen, tabs) tuples.
     """
     db = profile / "synced-tabs.db"
-    if not db.exists(): return []
+    if not db.exists():
+        return []
 
     results = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -264,12 +291,17 @@ def _synced_tabs(profile):
         tabs = []
         for tab in data.get("tabs", []):
             history = tab.get("urlHistory") or []
-            if not history or not history[0].startswith(("http://", "https://")): continue
-            tabs.append({
-                "url": history[0],
-                "title": tab.get("title"),
-                "last_accessed": time.string(tab["lastUsed"]) if tab.get("lastUsed") else None,
-            })
+            if not history or not history[0].startswith(("http://", "https://")):
+                continue
+            tabs.append(
+                {
+                    "url": history[0],
+                    "title": tab.get("title"),
+                    "last_accessed": time.string(tab["lastUsed"])
+                    if tab.get("lastUsed")
+                    else None,
+                }
+            )
         device = _device_name(data.get("clientName", ""))
         results.append((device, time.string(last_modified // 1000), tabs))
     return results
@@ -283,8 +315,10 @@ def _copy_db(db, copy):
     shutil.copyfile(db, copy)
     wal = db.with_name(db.name + "-wal")
     wal_copy = copy.with_name(copy.name + "-wal")
-    if wal.exists(): shutil.copyfile(wal, wal_copy)
-    elif wal_copy.exists(): wal_copy.unlink()
+    if wal.exists():
+        shutil.copyfile(wal, wal_copy)
+    elif wal_copy.exists():
+        wal_copy.unlink()
 
 
 def _newer(a, b):

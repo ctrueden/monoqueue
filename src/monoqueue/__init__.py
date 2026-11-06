@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -11,17 +10,27 @@
 The monoqueue data structure with core business logic.
 """
 
+from __future__ import annotations
+
 import datetime
 import json
 import traceback
 from pathlib import Path
-import re
-from typing import Any, Dict, Optional, List
+from typing import Any
 from urllib.parse import urlsplit
 
-from . import caldav, discourse, firefox, github, imap, notifications, scijava
+from . import (
+    caldav,
+    discourse,
+    firefox,
+    github,
+    imap,
+    notifications,
+    scijava,
+    time,
+    urls,
+)
 from .config import Config, read_config  # noqa: F401
-from . import time, urls
 from .lock import lock, write_json
 from .log import log
 from .parse import evaluate
@@ -40,7 +49,7 @@ HANDLERS = {
 }
 
 
-def merge_item(item: Dict[str, Any], data: Dict[str, Any]) -> None:
+def merge_item(item: dict[str, Any], data: dict[str, Any]) -> None:
     """
     Merge data about an action item into the item.
 
@@ -51,7 +60,8 @@ def merge_item(item: Dict[str, Any], data: Dict[str, Any]) -> None:
     for key, pick in (("created", min), ("updated", max)):
         if item.get(key) and data.get(key):
             data[key] = pick(item[key], data[key], key=time.str2dt)
-    if item.get("title"): data.pop("title", None)
+    if item.get("title"):
+        data.pop("title", None)
     item.update(data)
 
 
@@ -66,22 +76,23 @@ class Source:
     that source's file from its last success remains in use.
     """
 
-    def __init__(self, mq: "Monoqueue", name: str):
+    def __init__(self, mq: Monoqueue, name: str):
         self.mq = mq
         self.name = name
-        self.items: Dict[str, Dict[str, Any]] = {}
+        self.items: dict[str, dict[str, Any]] = {}
         self.progress = mq.progress
 
     def normalize(self, url: str) -> str:
         return self.mq.normalize(url)
 
-    def put(self, url: str, data: Dict[str, Any], weak: bool = False) -> str:
+    def put(self, url: str, data: dict[str, Any], weak: bool = False) -> str:
         """
         Report information about an action item; see Monoqueue.put.
         """
         url = self.normalize(url)
         item = self.items.setdefault(url, {"weak": True} if weak else {})
-        if not weak: item.pop("weak", None)
+        if not weak:
+            item.pop("weak", None)
         merge_item(item, data)
         return url
 
@@ -104,8 +115,10 @@ class Monoqueue:
             The Config to use, or a dict of sections in the form of an old
             monoqueue.conf; by default, the user's configuration.
         """
-        if config is None: config = Config.load()
-        elif not isinstance(config, Config): config = Config.legacy(config)
+        if config is None:
+            config = Config.load()
+        elif not isinstance(config, Config):
+            config = Config.legacy(config)
         self.config = config
         self.items = {}
         self._impact = {}
@@ -124,15 +137,18 @@ class Monoqueue:
                 baseurl = section_config.get("baseurl", f"https://{section}")
                 self.discourse_hosts.add(urlsplit(baseurl).netloc.lower())
 
-    def load(self,
+    def load(
+        self,
         items_path: Path = _DEFAULT_ITEMS_PATH,
-        metadata_path: Path = _DEFAULT_METADATA_PATH
+        metadata_path: Path = _DEFAULT_METADATA_PATH,
     ) -> None:
-        if items_path is not None: self.items = self._load(items_path)
+        if items_path is not None:
+            self.items = self._load(items_path)
         self._metadata = self._load_metadata(metadata_path)
         self._dirty_metadata.clear()
         self._apply_links()
-        if self.items: self._score()
+        if self.items:
+            self._score()
 
     def reload_metadata(self, metadata_path: Path = _DEFAULT_METADATA_PATH) -> None:
         """
@@ -143,19 +159,26 @@ class Monoqueue:
         for url in self._dirty_metadata:
             metadata[url] = self._metadata[url]
         changed = {
-            url for url in metadata.keys() | self._metadata.keys()
+            url
+            for url in metadata.keys() | self._metadata.keys()
             if metadata.get(url) != self._metadata.get(url)
         }
         self._metadata = metadata
         # NB: Rescore only what changed, since scoring everything is slow.
-        changed |= {metadata[url]["linked_to"] for url in changed if metadata.get(url, {}).get("linked_to")}
+        changed |= {
+            metadata[url]["linked_to"]
+            for url in changed
+            if metadata.get(url, {}).get("linked_to")
+        }
         self._apply_links()
         for url in changed:
-            if url in self.items: self._score_item(url)
+            if url in self.items:
+                self._score_item(url)
 
-    def save(self,
-        items_path: Optional[Path] = _DEFAULT_ITEMS_PATH,
-        metadata_path: Optional[Path] = _DEFAULT_METADATA_PATH
+    def save(
+        self,
+        items_path: Path | None = _DEFAULT_ITEMS_PATH,
+        metadata_path: Path | None = _DEFAULT_METADATA_PATH,
     ) -> None:
         """
         Save action items and/or metadata to disk.
@@ -166,7 +189,8 @@ class Monoqueue:
         are then visible to this one too.
         """
         self._save(self.items, items_path)
-        if metadata_path is None: return
+        if metadata_path is None:
+            return
         with lock(metadata_path.with_name(metadata_path.name + ".lock")):
             metadata = self._load_metadata(metadata_path)
             for url in self._dirty_metadata:
@@ -175,7 +199,7 @@ class Monoqueue:
         self._metadata = metadata
         self._dirty_metadata.clear()
 
-    def summary(self) -> Dict[str, int]:
+    def summary(self) -> dict[str, int]:
         """
         Summarize the queue: the number of active alerts (e.g. failing
         sources), active items due within a day or overdue, and all
@@ -184,11 +208,15 @@ class Monoqueue:
         urls = self.urls()
         return {
             "alerts": sum(1 for url in urls if self.items[url].get("alert")),
-            "due": sum(1 for url in urls if self.items[url].get("seconds_until_due", float("inf")) < 86400),
+            "due": sum(
+                1
+                for url in urls
+                if self.items[url].get("seconds_until_due", float("inf")) < 86400
+            ),
             "active": len(urls),
         }
 
-    def save_status(self, path: Optional[Path] = _DEFAULT_STATUS_PATH) -> None:
+    def save_status(self, path: Path | None = _DEFAULT_STATUS_PATH) -> None:
         """
         Write the queue's summary to a one-line status file, for display
         by status bars (e.g. byobu) without the cost of loading the queue:
@@ -198,21 +226,24 @@ class Monoqueue:
         where <written> is when the summary was written, in seconds since
         the epoch, so readers can tell when updates have stopped running.
         """
-        if path is None: return
+        if path is None:
+            return
         s = self.summary()
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(f".{path.name}.tmp")
-        tmp.write_text(f"{s['alerts']} {s['due']} {s['active']} {int(time.now().timestamp())}\n")
+        tmp.write_text(
+            f"{s['alerts']} {s['due']} {s['active']} {int(time.now().timestamp())}\n"
+        )
         tmp.replace(path)
 
-    def _load_metadata(self, path: Optional[Path]) -> Dict[str, Any]:
+    def _load_metadata(self, path: Path | None) -> dict[str, Any]:
         metadata = {}
         for url, entry in self._load(path).items():
             # Metadata from older versions may be keyed by unnormalized URLs.
             metadata.setdefault(self.normalize(url), {}).update(entry)
         return metadata
 
-    def urls(self, active_only=True) -> List[str]:
+    def urls(self, active_only=True) -> list[str]:
         """
         Get the list of action item URLs, ordered by impact score,
         except that alerts (e.g. failing sources) always come first.
@@ -224,12 +255,15 @@ class Monoqueue:
             else self.items
         )
         urls.sort(
-            key=lambda url: (bool(self.items[url].get("alert")), self.impact(url).value),
+            key=lambda url: (
+                bool(self.items[url].get("alert")),
+                self.impact(url).value,
+            ),
             reverse=True,
         )
         return urls
 
-    def reload_rules(self, config: Optional[Config] = None) -> None:
+    def reload_rules(self, config: Config | None = None) -> None:
         """
         Reload the rules, e.g. after editing them, and rescore everything.
         """
@@ -238,13 +272,13 @@ class Monoqueue:
         self.rules = self.config.rule_list()
         self._score()
 
-    def sources(self) -> List[str]:
+    def sources(self) -> list[str]:
         """
         Get the names of the configured sources, in configuration order.
         """
         return list(self.config.sources)
 
-    def update(self, sources: Optional[List[str]] = None) -> None:
+    def update(self, sources: list[str] | None = None) -> None:
         """
         Update the queue from its sources.
 
@@ -258,7 +292,8 @@ class Monoqueue:
             Either way, the items of all sources are merged.
         """
         for section in self.sources():
-            if sources and section not in sources: continue
+            if sources and section not in sources:
+                continue
             self._update_source(section, self.config.sources[section])
 
         self.items = self._merge_sources()
@@ -278,15 +313,18 @@ class Monoqueue:
                 raise ValueError(f"Unsupported source type: {handler}")
             source = Source(self, section)
             HANDLERS[handler](source, config)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - one failing source must not stop the rest
             log.error("Source %s failed: %s", section, e)
-            if status.get("ok", True): status["failing_since"] = now
-            status.update({
-                "ok": False,
-                "last_attempt": now,
-                "error": f"{type(e).__name__}: {e}",
-                "traceback": traceback.format_exc(),
-            })
+            if status.get("ok", True):
+                status["failing_since"] = now
+            status.update(
+                {
+                    "ok": False,
+                    "last_attempt": now,
+                    "error": f"{type(e).__name__}: {e}",
+                    "traceback": traceback.format_exc(),
+                }
+            )
         else:
             log.debug("Source %s -> %d items", section, len(source.items))
             self._save(
@@ -296,7 +334,7 @@ class Monoqueue:
             status = {"ok": True, "last_attempt": now, "last_success": now}
         self._save(status, status_path)
 
-    def _merge_sources(self) -> Dict[str, Dict[str, Any]]:
+    def _merge_sources(self) -> dict[str, dict[str, Any]]:
         """
         Merge the saved items of all configured sources, in configuration
         order. Weak items (which only annotate) are merged last, and only
@@ -320,14 +358,15 @@ class Monoqueue:
                 items[f"monoqueue:source/{name}"] = self._failure_item(name, status)
 
         for name, url, item in weak:
-            if url not in items: continue
+            if url not in items:
+                continue
             merge_item(items[url], {k: v for k, v in item.items() if k != "weak"})
             items[url]["sources"].append(name)
 
         return items
 
     @staticmethod
-    def _failure_item(name: str, status: Dict[str, Any]) -> Dict[str, Any]:
+    def _failure_item(name: str, status: dict[str, Any]) -> dict[str, Any]:
         last_success = status.get("last_success")
         return {
             "title": f"Fix monoqueue source: {name}",
@@ -338,8 +377,8 @@ class Monoqueue:
                 f"last success {last_success or 'never'}.\n"
                 + (
                     "Until it is fixed, the queue uses this source's items from its last success."
-                    if last_success else
-                    "This source has no items in the queue until it succeeds."
+                    if last_success
+                    else "This source has no items in the queue until it succeeds."
                 )
                 + f"\n\n{status.get('traceback', '')}"
             ),
@@ -356,7 +395,7 @@ class Monoqueue:
         """
         return urls.normalize(url, self.discourse_hosts)
 
-    def put(self, url: str, data: Dict[str, Any], weak: bool = False) -> str:
+    def put(self, url: str, data: dict[str, Any], weak: bool = False) -> str:
         """
         Merge data from a source into the action item for the given URL.
 
@@ -376,11 +415,12 @@ class Monoqueue:
             The normalized URL.
         """
         url = self.normalize(url)
-        if weak and url not in self.items: return url
+        if weak and url not in self.items:
+            return url
         merge_item(self.items.setdefault(url, {}), data)
         return url
 
-    def item(self, url: str) -> Optional[Dict[str, Any]]:
+    def item(self, url: str) -> dict[str, Any] | None:
         """
         Get action item data for the given URL.
 
@@ -402,7 +442,7 @@ class Monoqueue:
         """
         return (self.items.get(url) or {}).get("link") or url
 
-    def metadata(self, url: str) -> Dict[str, Any]:
+    def metadata(self, url: str) -> dict[str, Any]:
         """
         Get metadata (e.g. deferrals) for the given URL.
 
@@ -433,7 +473,8 @@ class Monoqueue:
             The target's normalized URL.
         """
         url, target = self.normalize(url), self.normalize(target)
-        if url == target: raise ValueError(f"Cannot link an item to itself: {url}")
+        if url == target:
+            raise ValueError(f"Cannot link an item to itself: {url}")
         # Link to the end of any chain of links, so that items never move twice.
         while self.metadata(target).get("linked_to"):
             target = self.metadata(target)["linked_to"]
@@ -441,23 +482,28 @@ class Monoqueue:
         source["linked_to"] = target
         links = dest.setdefault("links", [])
         for linked in [url] + source.pop("links", []):
-            if linked not in links: links.append(linked)
+            if linked not in links:
+                links.append(linked)
             self.metadata(linked)["linked_to"] = target
             self.mark_dirty(linked)
         # The target inherits what the item had, unless it has its own.
         for key in ("triage", "note", "deferred_at", "deferred_until"):
-            if key in source and key not in dest: dest[key] = source[key]
+            if key in source and key not in dest:
+                dest[key] = source[key]
         self.mark_dirty(target)
         self._apply_links()
         self._impact.pop(url, None)
-        if target in self.items: self._score_item(target)
+        if target in self.items:
+            self._score_item(target)
         return target
 
     def _apply_links(self) -> None:
         """
         Merge each linked item into the item it is linked to.
         """
-        for url in [u for u in self.items if self._metadata.get(u, {}).get("linked_to")]:
+        for url in [
+            u for u in self.items if self._metadata.get(u, {}).get("linked_to")
+        ]:
             target = self._metadata[url]["linked_to"]
             data = self.items.pop(url)
             if target not in self.items:
@@ -468,8 +514,16 @@ class Monoqueue:
             sources = merged.get("sources", []) + [
                 s for s in data.get("sources", []) if s not in merged.get("sources", [])
             ]
-            merge_item(merged, {k: v for k, v in data.items() if k not in merged or k in ("created", "updated")})
-            if sources: merged["sources"] = sources
+            merge_item(
+                merged,
+                {
+                    k: v
+                    for k, v in data.items()
+                    if k not in merged or k in ("created", "updated")
+                },
+            )
+            if sources:
+                merged["sources"] = sources
 
     def defer(self, url: str, until: datetime.datetime) -> None:
         """
@@ -494,16 +548,19 @@ class Monoqueue:
         :return:
             True if the action item is currently active, False if not.
         """
-        if url not in self.items: return False
+        if url not in self.items:
+            return False
         metadata = self.metadata(url)
-        if metadata is None or "deferred_until" not in metadata: return True
+        if metadata is None or "deferred_until" not in metadata:
+            return True
 
         item = self.item(url)
         if "deferred_at" in metadata and "updated" in item:
             # Check whether item has changed since deferral occurred.
             deferred_at = time.str2dt(metadata["deferred_at"])
             updated = time.str2dt(item["updated"])
-            if updated > deferred_at: return True
+            if updated > deferred_at:
+                return True
 
         # Check whether the deferral time has already passed.
         deferred_until = time.str2dt(metadata["deferred_until"])
@@ -520,7 +577,7 @@ class Monoqueue:
         return self._impact.get(url)
 
     @staticmethod
-    def _load(path: Path) -> Dict[str, Any]:
+    def _load(path: Path) -> dict[str, Any]:
         log.debug("Loading %s...", path)
 
         if path is None or not path.exists():
@@ -530,17 +587,18 @@ class Monoqueue:
             return json.load(f)
 
     @staticmethod
-    def _save(data: Dict[str, Any], path: Path) -> None:
+    def _save(data: dict[str, Any], path: Path) -> None:
         log.debug("Saving %s...", path)
 
-        if data is None or path is None: return
+        if data is None or path is None:
+            return
         write_json(data, path)
 
     def _score(self):
         log.debug("Scoring action items...")
 
         # Initially, each rule has not applied to any action items.
-        unused_rules = set(consequence for _, consequence in self.rules)
+        unused_rules = {consequence for _, consequence in self.rules}
 
         self._impact.clear()
         for url in self.items:
@@ -549,9 +607,9 @@ class Monoqueue:
         # Warn about rules that never applied to an action item.
         for _, consequence in self.rules:
             if consequence in unused_rules:
-                log.debug(f"Irrelevant rule: %s", consequence)
+                log.debug("Irrelevant rule: %s", consequence)
 
-    def _score_item(self, url: str, unused_rules: Optional[set] = None) -> None:
+    def _score_item(self, url: str, unused_rules: set | None = None) -> None:
         item = self.items[url]
 
         # Compute time-sensitive age fields.
@@ -563,7 +621,9 @@ class Monoqueue:
             item["seconds_since_update"] = updated_age.total_seconds()
         if item.get("due"):
             item["seconds_until_due"] = -time.age(item["due"]).total_seconds()
-        accessed = [t["last_accessed"] for t in item.get("tabs", []) if t.get("last_accessed")]
+        accessed = [
+            t["last_accessed"] for t in item.get("tabs", []) if t.get("last_accessed")
+        ]
         if accessed:
             tab_age = time.age(max(accessed, key=time.str2dt))
             item["seconds_since_tab_access"] = tab_age.total_seconds()
@@ -571,17 +631,20 @@ class Monoqueue:
         # NB: Rules see the item's metadata too, e.g. meta/triage/size.
         info = item
         meta = self._metadata.get(url)
-        if meta: info = {**item, "meta": meta}
+        if meta:
+            info = {**item, "meta": meta}
 
         score_value = 1
         score_rules = []
         for expression, consequence in self.rules:
             # Try to apply the rule to this action item.
             applies = evaluate(expression, info)
-            if not applies: continue  # Rule does not apply.
+            if not applies:
+                continue  # Rule does not apply.
 
             # The rule applies. Mark it as used.
-            if unused_rules is not None: unused_rules.discard(consequence)
+            if unused_rules is not None:
+                unused_rules.discard(consequence)
 
             # Consequences are of the form:
             #
@@ -602,7 +665,7 @@ class Monoqueue:
             # The above rule should increase the score by the comment count.
 
             op = consequence[0]
-            smv = consequence[1:consequence.index(":")]
+            smv = consequence[1 : consequence.index(":")]
 
             if smv == "X":
                 # Score mod value is the rule evaluation result.
@@ -615,11 +678,16 @@ class Monoqueue:
                 smv = float(smv)
 
             # Now change the score using the operator and score modification value.
-            if op == '+': score_value += smv
-            elif op == '-': score_value = max(1, score_value - smv)
-            elif op == 'x': score_value *= smv
-            elif op == '/': score_value = max(1, score_value / smv)
-            else: raise RuntimeError(f"Invalid rule consequence: {consequence}")
+            if op == "+":
+                score_value += smv
+            elif op == "-":
+                score_value = max(1, score_value - smv)
+            elif op == "x":
+                score_value *= smv
+            elif op == "/":
+                score_value = max(1, score_value / smv)
+            else:
+                raise RuntimeError(f"Invalid rule consequence: {consequence}")
 
             # Record the consequence on this item's list of applied rules.
             score_rules.append(consequence)

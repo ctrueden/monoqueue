@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -34,11 +33,15 @@ def cmd_info(*args):
             item = mq.item(url)
 
             urls = mq.urls()
-            rank = f"{urls.index(url) + 1} of {len(urls)}" if url in urls else "inactive"
+            rank = (
+                f"{urls.index(url) + 1} of {len(urls)}" if url in urls else "inactive"
+            )
             print(f"[{url}] (rank {rank})")
 
-            if metadata: pprint(metadata)
-            else: print("<No local metadata>")
+            if metadata:
+                pprint(metadata)
+            else:
+                print("<No local metadata>")
 
             if impact:
                 pprint(impact.rules)
@@ -46,8 +49,10 @@ def cmd_info(*args):
             else:
                 print("<No computed impact>")
 
-            if item: pprint(item)
-            else: print("<No action item data>")
+            if item:
+                pprint(item)
+            else:
+                print("<No action item data>")
 
     return 0
 
@@ -66,13 +71,14 @@ def cmd_ls(*args):
         return fragment.lower() in string.lower()
 
     def contains(url, item, arg):
-        if inlo(arg, url) or inlo(arg, item['title']): return True
+        if inlo(arg, url) or inlo(arg, item["title"]):
+            return True
         return (
-            'issue' in item
-            and item['issue'] is not None
-            and 'body' in item['issue']
-            and item['issue']['body'] is not None
-            and inlo(arg, item['issue']['body'])
+            "issue" in item
+            and item["issue"] is not None
+            and "body" in item["issue"]
+            and item["issue"]["body"] is not None
+            and inlo(arg, item["issue"]["body"])
         )
 
     w = len(str(len(urls)))
@@ -80,7 +86,8 @@ def cmd_ls(*args):
         item = mq.item(url)
 
         # Filter out non-matching items.
-        if any(not contains(url, item, arg) for arg in args): continue
+        if any(not contains(url, item, arg) for arg in args):
+            continue
 
         impact = mq.impact(url)
         print(f"{i + 1:>{w}} [{impact.value:.1f}] -- {url} -- {item['title']}")
@@ -97,14 +104,17 @@ def cmd_triage(*args):
     mq.load()
     for url in args:
         url = mq.normalize(url)
-        if mq.item(url) is None: log.warning("Not in the queue: %s", url)
+        if mq.item(url) is None:
+            log.warning("Not in the queue: %s", url)
         log.info("Triaging %s...", url)
         try:
             result = agent.triage(mq, url, mq.config.action("triage"))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - report and move on to the next URL
             log.error("Cannot triage %s: %s", url, e)
             continue
-        print(f"{url}\n  {result['size']}, {result['actor']}: {result['next_action']}\n  {result['summary']}")
+        print(
+            f"{url}\n  {result['size']}, {result['actor']}: {result['next_action']}\n  {result['summary']}"
+        )
         mq.save(items_path=None)
     return 0
 
@@ -116,17 +126,19 @@ def cmd_promote(*args):
         if flag in args:
             i = args.index(flag)
             options[flag] = args[i + 1]
-            del args[i:i + 2]
+            del args[i : i + 2]
     yes = "--yes" in args
-    if yes: args.remove("--yes")
+    if yes:
+        args.remove("--yes")
     if len(args) != 1:
         log.error("Usage: mq promote <url> [--repo owner/name] [--why text] [--yes]")
         return 3
 
     mq = Monoqueue()
     mq.load()
-    issue_url = promote.interact(mq, args[0], options.get("--why", ""),
-                                 options.get("--repo"), yes)
+    issue_url = promote.interact(
+        mq, args[0], options.get("--why", ""), options.get("--repo"), yes
+    )
     mq.save(items_path=None)
     return 0 if issue_url else 1
 
@@ -146,7 +158,8 @@ def cmd_link(*args):
 def cmd_tune(*args):
     args = list(args)
     edit = "--edit" in args
-    if edit: args.remove("--edit")
+    if edit:
+        args.remove("--edit")
     if len(args) != 1:
         log.error("Usage: mq tune <url> [--edit]")
         return 3
@@ -155,14 +168,17 @@ def cmd_tune(*args):
     mq.load()
     url = mq.normalize(args[0])
     command, cwd = agent.tune_command(mq, url, mq.config.action("tune"))
-    if edit: command = agent.edit_first(command)
+    if edit:
+        command = agent.edit_first(command)
     return subprocess.run(command, cwd=cwd, check=False).returncode
 
 
 def cmd_migrate_config(*args):
     sources_dir = Monoqueue._DEFAULT_SOURCES_DIR
     config.migrate(sources_dir=sources_dir)
-    print(f"Split {config.LEGACY_PATH} into {config.CONFIG_DIR}/{{rules,sources,settings}}.conf.")
+    print(
+        f"Split {config.LEGACY_PATH} into {config.CONFIG_DIR}/{{rules,sources,settings}}.conf."
+    )
     for old, new in config.RENAMED.items():
         print(f"Renamed source [{old}] to [{new}], if present.")
     print(f"Once all is well, delete {config.LEGACY_PATH}, which holds secrets.")
@@ -183,7 +199,7 @@ def cmd_up(*args):
     if "--wait" in args:
         i = args.index("--wait")
         wait = float(args[i + 1])
-        del args[i:i + 2]
+        del args[i : i + 2]
 
     mq = Monoqueue()
 
@@ -237,15 +253,24 @@ migrate-config - split ~/.config/monoqueue.conf into ~/.config/monoqueue/*.conf
     command = args[0]
     args = args[1:]
 
-    if command == "info": return cmd_info(*args)
-    if command == "link": return cmd_link(*args)
-    if command == "ls": return cmd_ls(*args)
-    if command == "migrate-config": return cmd_migrate_config(*args)
-    if command == "promote": return cmd_promote(*args)
-    if command == "triage": return cmd_triage(*args)
-    if command == "tune": return cmd_tune(*args)
-    if command == "ui": return cmd_ui(*args)
-    if command == "up": return cmd_up(*args)
+    if command == "info":
+        return cmd_info(*args)
+    if command == "link":
+        return cmd_link(*args)
+    if command == "ls":
+        return cmd_ls(*args)
+    if command == "migrate-config":
+        return cmd_migrate_config(*args)
+    if command == "promote":
+        return cmd_promote(*args)
+    if command == "triage":
+        return cmd_triage(*args)
+    if command == "tune":
+        return cmd_tune(*args)
+    if command == "ui":
+        return cmd_ui(*args)
+    if command == "up":
+        return cmd_up(*args)
 
     log.error("Invalid subcommand: %s", command)
     sys.stderr.write(usage)

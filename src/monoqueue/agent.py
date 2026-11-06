@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -33,13 +32,15 @@ them, e.g.:
     meta/triage/actor == "others"        -> /4: waiting on others
 """
 
+from __future__ import annotations
+
 import json
 import re
 import shlex
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from . import time
 from .log import log
@@ -70,14 +71,20 @@ SIZES = {
 TRIAGE_SCHEMA = {
     "type": "object",
     "properties": {
-        "summary": {"type": "string", "description": "What the item is about, in one sentence."},
+        "summary": {
+            "type": "string",
+            "description": "What the item is about, in one sentence.",
+        },
         "size": {"type": "string", "enum": list(SIZES)},
-        "next_action": {"type": "string", "description": "The concrete next step, as an imperative sentence."},
+        "next_action": {
+            "type": "string",
+            "description": "The concrete next step, as an imperative sentence.",
+        },
         "actor": {
             "type": "string",
             "enum": ["me", "agent", "others"],
             "description": "Who must take the next action: me personally, an AI agent "
-                           "(perhaps with my review), or someone else (I am waiting on them).",
+            "(perhaps with my review), or someone else (I am waiting on them).",
         },
     },
     "required": ["summary", "size", "next_action", "actor"],
@@ -86,9 +93,15 @@ TRIAGE_SCHEMA = {
 ISSUE_SCHEMA = {
     "type": "object",
     "properties": {
-        "repo": {"type": "string", "description": "The owner/name of the GitHub repository."},
+        "repo": {
+            "type": "string",
+            "description": "The owner/name of the GitHub repository.",
+        },
         "title": {"type": "string"},
-        "body": {"type": "string", "description": "The issue body, in GitHub Markdown."},
+        "body": {
+            "type": "string",
+            "description": "The issue body, in GitHub Markdown.",
+        },
     },
     "required": ["repo", "title", "body"],
 }
@@ -105,61 +118,83 @@ def describe(mq, url: str, max_body: int = 4000) -> str:
     """
     item = mq.item(url) or {}
     lines = [f"URL: {url}", f"Title: {(item.get('title') or '').strip()}"]
-    if item.get("link"): lines.append(f"Link: {item['link']}")
-    if item.get("sources"): lines.append(f"Sources: {', '.join(item['sources'])}")
+    if item.get("link"):
+        lines.append(f"Link: {item['link']}")
+    if item.get("sources"):
+        lines.append(f"Sources: {', '.join(item['sources'])}")
     for key in ("created", "updated", "due"):
-        if item.get(key): lines.append(f"{key.capitalize()}: {item[key]}")
+        if item.get(key):
+            lines.append(f"{key.capitalize()}: {item[key]}")
 
     issue = item.get("issue")
     if issue:
         kind = "pull request" if issue.get("pull_request") else "issue"
-        lines.append(f"GitHub {kind} #{issue.get('number')}, {issue.get('state')}"
-                     f"{' (draft)' if issue.get('draft') else ''}, "
-                     f"by {(issue.get('user') or {}).get('login')} ({issue.get('author_association')}), "
-                     f"{issue.get('comments')} comments")
+        lines.append(
+            f"GitHub {kind} #{issue.get('number')}, {issue.get('state')}"
+            f"{' (draft)' if issue.get('draft') else ''}, "
+            f"by {(issue.get('user') or {}).get('login')} ({issue.get('author_association')}), "
+            f"{issue.get('comments')} comments"
+        )
         labels = [label.get("name") for label in issue.get("labels") or []]
-        if labels: lines.append(f"Labels: {', '.join(labels)}")
+        if labels:
+            lines.append(f"Labels: {', '.join(labels)}")
         assignees = [a.get("login") for a in issue.get("assignees") or []]
-        if assignees: lines.append(f"Assignees: {', '.join(assignees)}")
-        if issue.get("milestone"): lines.append(f"Milestone: {issue['milestone'].get('title')}")
+        if assignees:
+            lines.append(f"Assignees: {', '.join(assignees)}")
+        if issue.get("milestone"):
+            lines.append(f"Milestone: {issue['milestone'].get('title')}")
     topic = item.get("topic")
     if topic:
-        lines.append(f"Forum topic with {topic.get('posts_count')} posts, tags: "
-                     f"{', '.join(topic.get('tags') or [])}; "
-                     f"{'has' if topic.get('has_accepted_answer') else 'no'} accepted answer")
+        lines.append(
+            f"Forum topic with {topic.get('posts_count')} posts, tags: "
+            f"{', '.join(topic.get('tags') or [])}; "
+            f"{'has' if topic.get('has_accepted_answer') else 'no'} accepted answer"
+        )
     if item.get("notification"):
-        lines.append(f"Unread GitHub notification: {item['notification'].get('reason')}")
+        lines.append(
+            f"Unread GitHub notification: {item['notification'].get('reason')}"
+        )
     if item.get("scijava"):
-        lines.append(f"My SciJava team roles for it: {', '.join(item['scijava'].get('roles', []))}")
+        lines.append(
+            f"My SciJava team roles for it: {', '.join(item['scijava'].get('roles', []))}"
+        )
     if item.get("tabs"):
         devices = sorted({t.get("device") for t in item["tabs"]})
         lines.append(f"Open in my browser tabs on: {', '.join(devices)}")
     if item.get("task"):
         task = item["task"]
-        lines.append(f"A task in my task list {task.get('list')!r}, priority {task.get('priority')}")
-        if task.get("links"): lines.append(f"Task links: {', '.join(task['links'])}")
+        lines.append(
+            f"A task in my task list {task.get('list')!r}, priority {task.get('priority')}"
+        )
+        if task.get("links"):
+            lines.append(f"Task links: {', '.join(task['links'])}")
     mail = item.get("email")
     if mail:
-        lines.append(f"Email thread of {mail.get('count')} messages, from {mail.get('from')}, "
-                     f"in {', '.join(mail.get('mailboxes') or [])}"
-                     + (f"; label {mail['label']}" if mail.get("label") else "")
-                     + ("; unread" if mail.get("unread") else ""))
+        lines.append(
+            f"Email thread of {mail.get('count')} messages, from {mail.get('from')}, "
+            f"in {', '.join(mail.get('mailboxes') or [])}"
+            + (f"; label {mail['label']}" if mail.get("label") else "")
+            + ("; unread" if mail.get("unread") else "")
+        )
     if item.get("bookmark"):
         lines.append("Bookmarked in my browser's action folder")
 
     links = mq.metadata(url).get("links")
-    if links: lines.append(f"Linked items: {', '.join(links)}")
+    if links:
+        lines.append(f"Linked items: {', '.join(links)}")
     note = mq.metadata(url).get("note")
-    if note: lines.append(f"My note: {note}")
+    if note:
+        lines.append(f"My note: {note}")
 
     body = (issue or {}).get("body") or item.get("description")
     if body:
-        if len(body) > max_body: body = body[:max_body] + "\n[...truncated]"
+        if len(body) > max_body:
+            body = body[:max_body] + "\n[...truncated]"
         lines += ["", "Body:", body]
     return "\n".join(lines)
 
 
-def triage(mq, url: str, config: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def triage(mq, url: str, config: dict[str, str] | None = None) -> dict[str, Any]:
     """
     Ask an agent to estimate an action item's size and next action,
     and record the result in the item's metadata.
@@ -183,8 +218,13 @@ Sizes: {"; ".join(f"{k} = {v}" for k, v in SIZES.items())}.
     return result
 
 
-def draft_issue(mq, url: str, repos: List[str], why: str = "",
-                config: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def draft_issue(
+    mq,
+    url: str,
+    repos: list[str],
+    why: str = "",
+    config: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """
     Ask an agent to draft a GitHub issue tracking an action item.
 
@@ -212,36 +252,49 @@ Why I care: {why or "(not given)"}
     return run(prompt, ISSUE_SCHEMA, config)
 
 
-def run(prompt: str, schema: Dict[str, Any], config: Dict[str, str]) -> Dict[str, Any]:
+def run(prompt: str, schema: dict[str, Any], config: dict[str, str]) -> dict[str, Any]:
     """
     Run an agent non-interactively, with read-only tools, returning its
     structured output, which conforms to the given JSON schema.
     """
     args = command(config) + [
-        "-p", prompt,
-        "--model", config.get("model", DEFAULT_MODEL),
-        "--output-format", "json",
-        "--json-schema", json.dumps(schema),
-        "--allowedTools", *READ_ONLY_TOOLS,
+        "-p",
+        prompt,
+        "--model",
+        config.get("model", DEFAULT_MODEL),
+        "--output-format",
+        "json",
+        "--json-schema",
+        json.dumps(schema),
+        "--allowedTools",
+        *READ_ONLY_TOOLS,
     ]
     log.debug("Running agent: %s", args[0])
     # NB: Run outside any project, so that no project's instructions apply.
     with tempfile.TemporaryDirectory(prefix="monoqueue-agent-") as cwd:
         result = subprocess.run(
-            args, cwd=cwd, capture_output=True, text=True, check=False,
+            args,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
             timeout=float(config.get("timeout", DEFAULT_TIMEOUT)),
         )
     try:
         output = json.loads(result.stdout)
     except ValueError:
-        raise RuntimeError(f"Agent failed: {result.stderr.strip() or result.stdout.strip()}")
+        raise RuntimeError(
+            f"Agent failed: {result.stderr.strip() or result.stdout.strip()}"
+        )
     if output.get("is_error") or not output.get("structured_output"):
-        raise RuntimeError(f"Agent failed: {output.get('result') or output.get('subtype')}")
+        raise RuntimeError(
+            f"Agent failed: {output.get('result') or output.get('subtype')}"
+        )
     log.debug("Agent cost: $%s", output.get("total_cost_usd"))
     return output["structured_output"]
 
 
-def work_command(mq, url: str, config: Optional[Dict[str, str]] = None):
+def work_command(mq, url: str, config: dict[str, str] | None = None):
     """
     Get the command line and working directory for working on an action
     item interactively with an agent: in the local clone of the item's
@@ -255,7 +308,8 @@ def work_command(mq, url: str, config: Optional[Dict[str, str]] = None):
     repo = github_repo(url)
     if repo:
         clone = Path(config.get("code_dir", DEFAULT_CODE_DIR)).expanduser() / repo
-        if clone.is_dir(): cwd = clone
+        if clone.is_dir():
+            cwd = clone
 
     prompt = f"""{config.get("about", DEFAULT_ABOUT)}
 
@@ -275,7 +329,7 @@ change anything, or post anything publicly.
     return args, cwd
 
 
-def tune_command(mq, url: str, config: Optional[Dict[str, str]] = None):
+def tune_command(mq, url: str, config: dict[str, str] | None = None):
     """
     Get the command line and working directory for adjusting the rules
     with an agent, starting from an action item that seems misprioritized.
@@ -328,7 +382,11 @@ def describe_score(mq, url: str, max_value: int = 500) -> str:
     Describe an action item's rank, score, and data, in plain text.
     """
     urls = mq.urls()
-    rank = f"{urls.index(url) + 1} of {len(urls)}" if url in urls else "not active (e.g. deferred)"
+    rank = (
+        f"{urls.index(url) + 1} of {len(urls)}"
+        if url in urls
+        else "not active (e.g. deferred)"
+    )
     impact = mq.impact(url)
     lines = [f"URL: {url}", f"Rank: {rank}"]
     if impact:
@@ -336,30 +394,38 @@ def describe_score(mq, url: str, max_value: int = 500) -> str:
         lines += [f"  {rule}" for rule in impact.rules]
 
     def shorten(value):
-        if isinstance(value, dict): return {k: shorten(v) for k, v in value.items()}
-        if isinstance(value, list): return [shorten(v) for v in value]
-        if isinstance(value, str) and len(value) > max_value: return value[:max_value] + "[...]"
+        if isinstance(value, dict):
+            return {k: shorten(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [shorten(v) for v in value]
+        if isinstance(value, str) and len(value) > max_value:
+            return value[:max_value] + "[...]"
         return value
 
     lines += ["", "Data:", json.dumps(shorten(mq.item(url) or {}), indent=1)]
     metadata = mq.metadata(url)
-    if metadata: lines += ["", "Metadata (meta):", json.dumps(shorten(metadata), indent=1)]
+    if metadata:
+        lines += ["", "Metadata (meta):", json.dumps(shorten(metadata), indent=1)]
     return "\n".join(lines)
 
 
-def edit_first(args: List[str]) -> List[str]:
+def edit_first(args: list[str]) -> list[str]:
     """
     Wrap an agent command line, whose last argument is its prompt, to let
     the user edit the prompt in their editor first. Emptying it aborts.
     """
-    f = tempfile.NamedTemporaryFile("w", suffix=".md", prefix="agent-prompt-", delete=False)
-    with f: f.write(args[-1])
-    script = ('f=$1; shift; ${VISUAL:-${EDITOR:-vi}} "$f" && p=$(cat "$f"); rm -f "$f"; '
-              '[ -n "$p" ] && exec "$@" "$p"')
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".md", prefix="agent-prompt-", delete=False
+    ) as f:
+        f.write(args[-1])
+    script = (
+        'f=$1; shift; ${VISUAL:-${EDITOR:-vi}} "$f" && p=$(cat "$f"); rm -f "$f"; '
+        '[ -n "$p" ] && exec "$@" "$p"'
+    )
     return ["sh", "-c", script, "sh", f.name, *args[:-1]]
 
 
-def command(config: Dict[str, str]) -> List[str]:
+def command(config: dict[str, str]) -> list[str]:
     """
     Get the agent command, split into arguments (e.g. for a wrapper script
     taking arguments of its own).
@@ -367,10 +433,11 @@ def command(config: Dict[str, str]) -> List[str]:
     return shlex.split(config.get("command", DEFAULT_COMMAND))
 
 
-def github_repo(url: str) -> Optional[str]:
+def github_repo(url: str) -> str | None:
     """
     Get the owner/name of the GitHub repository a URL is within, if any.
     """
     m = re.match("https://github\\.com/([\\w.-]+)/([\\w.-]+)", url)
-    if not m or m.group(1) in ("orgs", "settings", "notifications", "users"): return None
+    if not m or m.group(1) in ("orgs", "settings", "notifications", "users"):
+        return None
     return f"{m.group(1)}/{m.group(2).removesuffix('.git')}"

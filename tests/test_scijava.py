@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -20,13 +19,29 @@ REPO = "https://github.com/scifio/scifio-bf-compat"
 ROW = {
     "dev_id": "ctrueden",
     "popups": {
-        "components": [{"ga": "io.scif:scifio", "url": "https://github.com/scifio/scifio"}],
-        "reviewer_prs": [{"number": 523, "repo": "scifio/scifio", "title": "Fix bug", "url": PR}],
-        "support_issues": [
-            {"number": 1, "repo": "scifio/scifio", "title": "Use plugins", "url": ISSUE},
-            {"number": 2, "repo": "scifio/scifio", "title": "Other", "url": OTHER_ISSUE},
+        "components": [
+            {"ga": "io.scif:scifio", "url": "https://github.com/scifio/scifio"}
         ],
-        "developer_features": [{"number": 1, "repo": "scifio/scifio", "title": "Use plugins", "url": ISSUE}],
+        "reviewer_prs": [
+            {"number": 523, "repo": "scifio/scifio", "title": "Fix bug", "url": PR}
+        ],
+        "support_issues": [
+            {
+                "number": 1,
+                "repo": "scifio/scifio",
+                "title": "Use plugins",
+                "url": ISSUE,
+            },
+            {
+                "number": 2,
+                "repo": "scifio/scifio",
+                "title": "Other",
+                "url": OTHER_ISSUE,
+            },
+        ],
+        "developer_features": [
+            {"number": 1, "repo": "scifio/scifio", "title": "Use plugins", "url": ISSUE}
+        ],
         "maintainer_releases": [
             {"ga": "io.scif:scifio-bf-compat", "url": REPO},
             {"ga": "io.scif:scifio-bf-compat-tests", "url": REPO},
@@ -36,7 +51,10 @@ ROW = {
 
 
 def _team(generated):
-    return {"generated": generated, "rows": [ROW, {"dev_id": "someone-else", "popups": {}}]}
+    return {
+        "generated": generated,
+        "rows": [ROW, {"dev_id": "someone-else", "popups": {}}],
+    }
 
 
 def _update(mq, team, **config):
@@ -47,10 +65,11 @@ def _update(mq, team, **config):
 
 
 class TestSciJava(unittest.TestCase):
-
     def test_collect_merges_roles_per_url(self):
         items = scijava.collect(ROW)
-        self.assertEqual(["support_issues", "developer_features"], items[ISSUE]["roles"])
+        self.assertEqual(
+            ["support_issues", "developer_features"], items[ISSUE]["roles"]
+        )
         self.assertEqual("Use plugins", items[ISSUE]["title"])
         self.assertNotIn("https://github.com/scifio/scifio", items)
 
@@ -69,7 +88,9 @@ class TestSciJava(unittest.TestCase):
 
         self.assertEqual({PR, ISSUE, REPO}, set(mq.items))
         # Existing items get annotated with their roles, even if not included.
-        self.assertEqual(["support_issues", "developer_features"], mq.item(ISSUE)["scijava"]["roles"])
+        self.assertEqual(
+            ["support_issues", "developer_features"], mq.item(ISSUE)["scijava"]["roles"]
+        )
 
     def test_include_config(self):
         mq = Monoqueue({"rules": {}})
@@ -90,5 +111,5 @@ class TestSciJava(unittest.TestCase):
         self.assertIsNone(mq.item(scijava.STATUS_WORKFLOW_URL))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

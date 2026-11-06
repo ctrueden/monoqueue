@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -43,7 +42,11 @@ _MAX_PAGES = 20
 
 
 def update(mq, config):
-    reasons = {r.strip() for r in config.get("reasons", DEFAULT_REASONS).split(",") if r.strip()}
+    reasons = {
+        r.strip()
+        for r in config.get("reasons", DEFAULT_REASONS).split(",")
+        if r.strip()
+    }
     token = config.get("token") or gh_token()
     if not token:
         raise RuntimeError("No GitHub token: configure one, or log in with gh")
@@ -66,12 +69,17 @@ def update(mq, config):
                 log.debug("Skipping moot notification: %s", url)
                 continue
             others = [r for r in state["reviewers"] if r != me]
-            data.update(state=state["state"], reviewers=others, others_requested=len(others))
-        mq.put(url, {
-            "title": subject.get("title"),
-            "updated": notification.get("updated_at"),
-            "notification": data,
-        })
+            data.update(
+                state=state["state"], reviewers=others, others_requested=len(others)
+            )
+        mq.put(
+            url,
+            {
+                "title": subject.get("title"),
+                "updated": notification.get("updated_at"),
+                "notification": data,
+            },
+        )
 
 
 def moot(reason, state, me):
@@ -111,7 +119,8 @@ def subjects(token, urls):
         requested reviewers' logins, or org/team slugs for teams.
     """
     urls = sorted({u for u in urls if re.search("/(issues|pull)/\\d+$", u)})
-    if not urls: return None, {}
+    if not urls:
+        return None, {}
     aliases = "\n".join(
         f"  s{i}: resource(url: {json.dumps(u)}) {{{_SUBJECT_FIELDS}}}"
         for i, u in enumerate(urls)
@@ -125,15 +134,21 @@ def subjects(token, urls):
     response.raise_for_status()
     data = response.json().get("data")
     if not data:
-        raise RuntimeError(f"GitHub GraphQL query failed: {response.json().get('errors')}")
+        raise RuntimeError(
+            f"GitHub GraphQL query failed: {response.json().get('errors')}"
+        )
 
     states = {}
     for i, url in enumerate(urls):
         subject = data.get(f"s{i}")
-        if not subject or "state" not in subject: continue  # E.g. deleted, or no access.
+        if not subject or "state" not in subject:
+            continue  # E.g. deleted, or no access.
         reviewers = [
             r.get("login") or r.get("combinedSlug")
-            for r in (n.get("requestedReviewer") or {} for n in subject.get("reviewRequests", {}).get("nodes", []))
+            for r in (
+                n.get("requestedReviewer") or {}
+                for n in subject.get("reviewRequests", {}).get("nodes", [])
+            )
         ]
         states[url] = {
             "state": subject["state"].lower(),
@@ -148,11 +163,13 @@ def fetch(token):
     Fetch all unread notifications.
     """
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": "monoqueue",
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"token {token}",
-    })
+    session.headers.update(
+        {
+            "User-Agent": "monoqueue",
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"token {token}",
+        }
+    )
     notifications = []
     url = f"{_API_URL}?per_page=50"
     for _ in range(_MAX_PAGES):
@@ -161,7 +178,8 @@ def fetch(token):
         response.raise_for_status()
         notifications.extend(response.json())
         url = response.links.get("next", {}).get("url")
-        if not url: break
+        if not url:
+            break
     return notifications
 
 
@@ -174,7 +192,10 @@ def html_url(notification):
     """
     repo_url = notification.get("repository", {}).get("html_url", "")
     api_url = notification.get("subject", {}).get("url") or ""
-    m = re.match("https://api\\.github\\.com/repos/([^/]+/[^/]+)/(issues|pulls|commits)/(\\w+)$", api_url)
+    m = re.match(
+        "https://api\\.github\\.com/repos/([^/]+/[^/]+)/(issues|pulls|commits)/(\\w+)$",
+        api_url,
+    )
     if m:
         repo, kind, ident = m.groups()
         kind = {"issues": "issues", "pulls": "pull", "commits": "commit"}[kind]

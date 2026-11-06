@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -15,13 +14,15 @@ process holding them exits, however it exits. So unlike lock files
 whose mere existence means "locked", they can never go stale.
 """
 
+from __future__ import annotations
+
 import contextlib
 import json
 import os
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 try:
     import fcntl
@@ -33,7 +34,7 @@ _POLL_INTERVAL = 0.5
 
 
 @contextlib.contextmanager
-def lock(path: Path, timeout: Optional[float] = None) -> Iterator[None]:
+def lock(path: Path, timeout: float | None = None) -> Iterator[None]:
     """
     Hold an exclusive lock on the given lock file.
 
@@ -89,4 +90,5 @@ def write_json(data: Any, path: Path) -> None:
             json.dump(data, f, indent=2)
         os.replace(tmp, path)
     finally:
-        if tmp.exists(): tmp.unlink()
+        if tmp.exists():
+            tmp.unlink()

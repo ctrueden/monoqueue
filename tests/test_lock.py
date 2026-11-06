@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -31,7 +30,6 @@ with lock(Path(sys.argv[1])):
 
 
 class TestLock(unittest.TestCase):
-
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -40,7 +38,8 @@ class TestLock(unittest.TestCase):
     def _hold(self, path):
         holder = subprocess.Popen(
             [sys.executable, "-c", _HOLDER, str(path)],
-            stdout=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE,
+            text=True,
         )
         self.addCleanup(holder.wait)
         self.addCleanup(holder.kill)
@@ -51,9 +50,8 @@ class TestLock(unittest.TestCase):
         path = self.dir / "up.lock"
         self._hold(path)
         start = time.monotonic()
-        with self.assertRaises(TimeoutError):
-            with lock(path, timeout=1):
-                self.fail("Acquired a lock held by another process")
+        with self.assertRaises(TimeoutError), lock(path, timeout=1):
+            self.fail("Acquired a lock held by another process")
         self.assertGreaterEqual(time.monotonic() - start, 1)
 
     def test_released_when_holder_dies(self):
@@ -80,7 +78,6 @@ class TestLock(unittest.TestCase):
 
 
 class TestMetadataMerge(unittest.TestCase):
-
     def test_concurrent_sessions_keep_both_deferrals(self):
         with tempfile.TemporaryDirectory() as d:
             items_path = Path(d) / "items.json"
@@ -101,10 +98,12 @@ class TestMetadataMerge(unittest.TestCase):
             two.save(items_path=None, metadata_path=metadata_path)
 
             saved = json.loads(metadata_path.read_text())
-            self.assertEqual({"https://example.com/a", "https://example.com/b"}, set(saved))
+            self.assertEqual(
+                {"https://example.com/a", "https://example.com/b"}, set(saved)
+            )
             # Session two now also sees session one's deferral.
             self.assertIn("deferred_until", two.metadata("https://example.com/a"))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

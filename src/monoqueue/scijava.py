@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -42,15 +41,16 @@ ROLES = (
     "maintainer_releases",
 )
 
-STATUS_WORKFLOW_URL = "https://github.com/scijava/pom-scijava/actions/workflows/status.yml"
+STATUS_WORKFLOW_URL = (
+    "https://github.com/scijava/pom-scijava/actions/workflows/status.yml"
+)
 
 
 def update(mq, config):
     url = config.get("url", DEFAULT_URL)
     dev_id = config["dev_id"]
     include = {
-        role.strip()
-        for role in config.get("include", DEFAULT_INCLUDE).split(",")
+        role.strip() for role in config.get("include", DEFAULT_INCLUDE).split(",")
     }
     max_age_days = float(config.get("max_age_days", DEFAULT_MAX_AGE_DAYS))
 
@@ -69,7 +69,8 @@ def update(mq, config):
         # Roles not included only annotate items found by other sources,
         # so that e.g. 1000+ support issues do not flood the queue.
         data = {"scijava": info}
-        if info.get("title"): data["title"] = info["title"]
+        if info.get("title"):
+            data["title"] = info["title"]
         mq.put(item_url, data, weak=not include & set(info["roles"]))
 
 
@@ -88,7 +89,8 @@ def collect(row):
     for role in ROLES:
         for entry in popups.get(role, []):
             info = items.setdefault(entry["url"], {"roles": []})
-            if role not in info["roles"]: info["roles"].append(role)
+            if role not in info["roles"]:
+                info["roles"].append(role)
             if "title" in entry:
                 info["title"] = entry["title"]
             if "ga" in entry:
@@ -99,7 +101,8 @@ def collect(row):
         components = info.get("components")
         if components and "title" not in info:
             info["title"] = (
-                f"Release {components[0]}" if len(components) == 1
+                f"Release {components[0]}"
+                if len(components) == 1
                 else f"Release {len(components)} components: {', '.join(components)}"
             )
 
@@ -111,14 +114,18 @@ def _check_staleness(mq, generated, max_age_days):
         log.warning("SciJava team data has no generation timestamp")
         return
     age = time.age(generated)
-    if age.total_seconds() <= max_age_days * 86400: return
+    if age.total_seconds() <= max_age_days * 86400:
+        return
 
     # Stale data means the status job is probably broken; make it an item.
     log.warning("SciJava team data is %d days old", age.days)
-    mq.put(STATUS_WORKFLOW_URL, {
-        "title": f"Fix status.scijava.org: team data is {age.days} days stale",
-        "created": time.string(time.str2dt(generated)),
-        "updated": time.string(time.str2dt(generated)),
-        "scijava": {"roles": ["stale_status"]},
-        "alert": True,
-    })
+    mq.put(
+        STATUS_WORKFLOW_URL,
+        {
+            "title": f"Fix status.scijava.org: team data is {age.days} days stale",
+            "created": time.string(time.str2dt(generated)),
+            "updated": time.string(time.str2dt(generated)),
+            "scijava": {"roles": ["stale_status"]},
+            "alert": True,
+        },
+    )

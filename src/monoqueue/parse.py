@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -49,7 +48,6 @@ are available, but arbitrary function calls are notably *not* possible.
 """
 
 import ast
-
 from functools import cache
 from typing import Any
 
@@ -74,10 +72,14 @@ def tree(expr: str):
 
 def unary(data: Any, expr: str, operand: ast.AST, op: ast.UnaryOp):
     value = evaluate(expr, data, operand)
-    if isinstance(op, ast.Invert): return ~value
-    if isinstance(op, ast.Not): return not value
-    if isinstance(op, ast.UAdd): return +value
-    if isinstance(op, ast.USub): return -value
+    if isinstance(op, ast.Invert):
+        return ~value
+    if isinstance(op, ast.Not):
+        return not value
+    if isinstance(op, ast.UAdd):
+        return +value
+    if isinstance(op, ast.USub):
+        return -value
 
 
 def binary(expr: str, data: Any, lvalue: Any, op: ast.BinOp, right: ast.AST):
@@ -93,35 +95,60 @@ def binary(expr: str, data: Any, lvalue: Any, op: ast.BinOp, right: ast.AST):
     none = lvalue is None or rvalue is None
 
     # Evaluate binary ops (ast.operator) normally.
-    if isinstance(op, ast.Add): return None if none else (lvalue + rvalue)
-    if isinstance(op, ast.Sub): return None if none else (lvalue - rvalue)
-    if isinstance(op, ast.Mult): return None if none else (lvalue * rvalue)
-    if isinstance(op, ast.MatMult): return None if none else (lvalue @ rvalue)
-    if isinstance(op, ast.Div): return None if none else (lvalue / rvalue)
-    if isinstance(op, ast.Mod): return None if none else (lvalue % rvalue)
-    if isinstance(op, ast.Pow): return None if none else (lvalue ** rvalue)
-    if isinstance(op, ast.LShift): return None if none else (lvalue << rvalue)
-    if isinstance(op, ast.RShift): return None if none else (lvalue >> rvalue)
-    if isinstance(op, ast.BitOr): return None if none else (lvalue | rvalue)
-    if isinstance(op, ast.BitXor): return None if none else (lvalue ^ rvalue)
-    if isinstance(op, ast.BitAnd): return None if none else (lvalue & rvalue)
-    if isinstance(op, ast.FloorDiv): return None if none else (lvalue // rvalue)
+    if isinstance(op, ast.Add):
+        return None if none else (lvalue + rvalue)
+    if isinstance(op, ast.Sub):
+        return None if none else (lvalue - rvalue)
+    if isinstance(op, ast.Mult):
+        return None if none else (lvalue * rvalue)
+    if isinstance(op, ast.MatMult):
+        return None if none else (lvalue @ rvalue)
+    if isinstance(op, ast.Div):
+        return None if none else (lvalue / rvalue)
+    if isinstance(op, ast.Mod):
+        return None if none else (lvalue % rvalue)
+    if isinstance(op, ast.Pow):
+        return None if none else (lvalue**rvalue)
+    if isinstance(op, ast.LShift):
+        return None if none else (lvalue << rvalue)
+    if isinstance(op, ast.RShift):
+        return None if none else (lvalue >> rvalue)
+    if isinstance(op, ast.BitOr):
+        return None if none else (lvalue | rvalue)
+    if isinstance(op, ast.BitXor):
+        return None if none else (lvalue ^ rvalue)
+    if isinstance(op, ast.BitAnd):
+        return None if none else (lvalue & rvalue)
+    if isinstance(op, ast.FloorDiv):
+        return None if none else (lvalue // rvalue)
 
     # Evaluate comparison ops (ast.cmpop) normally.
-    if isinstance(op, ast.Eq): return lvalue == rvalue
-    if isinstance(op, ast.NotEq): return lvalue != rvalue
-    if isinstance(op, ast.Lt): return False if none else (lvalue < rvalue)
-    if isinstance(op, ast.LtE): return False if none else (lvalue <= rvalue)
-    if isinstance(op, ast.Gt): return False if none else (lvalue > rvalue)
-    if isinstance(op, ast.GtE): return False if none else (lvalue >= rvalue)
-    if isinstance(op, ast.Is): return lvalue is rvalue
-    if isinstance(op, ast.IsNot): return lvalue is not rvalue
-    if isinstance(op, ast.In): return False if rvalue is None else (lvalue in rvalue)
-    if isinstance(op, ast.NotIn): return True if rvalue is None else (lvalue not in rvalue)
+    if isinstance(op, ast.Eq):
+        return lvalue == rvalue
+    if isinstance(op, ast.NotEq):
+        return lvalue != rvalue
+    if isinstance(op, ast.Lt):
+        return False if none else (lvalue < rvalue)
+    if isinstance(op, ast.LtE):
+        return False if none else (lvalue <= rvalue)
+    if isinstance(op, ast.Gt):
+        return False if none else (lvalue > rvalue)
+    if isinstance(op, ast.GtE):
+        return False if none else (lvalue >= rvalue)
+    if isinstance(op, ast.Is):
+        return lvalue is rvalue
+    if isinstance(op, ast.IsNot):
+        return lvalue is not rvalue
+    if isinstance(op, ast.In):
+        return False if rvalue is None else (lvalue in rvalue)
+    if isinstance(op, ast.NotIn):
+        return True if rvalue is None else (lvalue not in rvalue)
 
     # Evaluate boolean ops (ast.boolop) normally.
-    if isinstance(op, ast.And): return lvalue and rvalue
-    if isinstance(op, ast.Or): return lvalue or rvalue
+    if isinstance(op, ast.And):
+        return lvalue and rvalue
+    if isinstance(op, ast.Or):
+        return lvalue or rvalue
 
     raise ValueError(f"Unsupported operation: {type(op)}")
 
@@ -163,12 +190,8 @@ def evaluate(expr: str, data: Any, node: Any = None):
         lvalue = evaluate(expr, data, node.left)
         result = True
         for op, cmp in zip(node.ops, node.comparators):
-            if not (
-                isinstance(op, ast.BinOp) or
-                isinstance(op, ast.cmpop) or
-                isinstance(op, ast.boolop)
-            ):
-                raise ValueError(f"Non-binary comparison op: {type(op)}")
+            if not (isinstance(op, (ast.BinOp, ast.cmpop, ast.boolop))):
+                raise TypeError(f"Non-binary comparison op: {type(op)}")
             rvalue = evaluate(expr, data, cmp)
             result = result and binary(expr, data, lvalue, op, ast.Constant(rvalue))
             lvalue = rvalue
@@ -208,7 +231,9 @@ def evaluate(expr: str, data: Any, node: Any = None):
         #     pass
         raise TypeError(f"Unsupported function call: {func}")
 
-    raise TypeError(f"Unsupported {type(node)} expression: {ast.get_source_segment(expr, node)}")
+    raise TypeError(
+        f"Unsupported {type(node)} expression: {ast.get_source_segment(expr, node)}"
+    )
 
 
 def main():

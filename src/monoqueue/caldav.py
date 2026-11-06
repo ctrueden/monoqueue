@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -70,18 +69,18 @@ def update(mq, config):
         verify=_verify(config.get("verify", "true")),
     )
     lists = {
-        name.strip()
-        for name in config.get("lists", "").split(",")
-        if name.strip()
+        name.strip() for name in config.get("lists", "").split(",") if name.strip()
     }
     link = config.get("link")
 
     for calendar in client.task_lists():
-        if lists and calendar["name"] not in lists: continue
+        if lists and calendar["name"] not in lists:
+            continue
         log.debug("Reading task list %s", calendar["name"])
         for href, data in client.todos(calendar["url"]):
             for task in parse_todos(data):
-                if task["status"] in ("COMPLETED", "CANCELLED"): continue
+                if task["status"] in ("COMPLETED", "CANCELLED"):
+                    continue
                 task["list"] = calendar["name"]
                 task_url = urljoin(calendar["url"], href)
                 url = (
@@ -90,16 +89,20 @@ def update(mq, config):
                         task=href.rstrip("/").rsplit("/", 1)[-1],
                         uid=task["uid"],
                     )
-                    if link else task_url
+                    if link
+                    else task_url
                 )
-                mq.put(url, {
-                    "title": task["summary"],
-                    "created": task["created"],
-                    "updated": task["updated"],
-                    "description": task["description"],
-                    "due": task["due"],
-                    "task": task,
-                })
+                mq.put(
+                    url,
+                    {
+                        "title": task["summary"],
+                        "created": task["created"],
+                        "updated": task["updated"],
+                        "description": task["description"],
+                        "due": task["due"],
+                        "task": task,
+                    },
+                )
 
 
 def parse_todos(data):
@@ -115,41 +118,48 @@ def parse_todos(data):
     for todo in icalendar.Calendar.from_ical(data).walk("VTODO"):
         # A recurring task has one VTODO per overridden occurrence;
         # just use the master.
-        if todo.get("RECURRENCE-ID") is not None: continue
+        if todo.get("RECURRENCE-ID") is not None:
+            continue
 
         description = str(todo.get("DESCRIPTION", ""))
         links = []
-        if todo.get("URL"): links.append(str(todo.get("URL")))
+        if todo.get("URL"):
+            links.append(str(todo.get("URL")))
         for link in _URL_PATTERN.findall(description):
             # A URL ending a sentence should not include its punctuation.
             link = link.rstrip(".,;:!?")
-            if link not in links: links.append(link)
+            if link not in links:
+                links.append(link)
 
         categories = []
         cats = todo.get("CATEGORIES")
-        for cat in (cats if isinstance(cats, list) else [cats] if cats else []):
+        for cat in cats if isinstance(cats, list) else [cats] if cats else []:
             categories.extend(str(c) for c in cat.cats)
 
-        tasks.append({
-            "uid": str(todo.get("UID", "")),
-            "summary": str(todo.get("SUMMARY", "")),
-            "description": description,
-            "status": str(todo.get("STATUS", "NEEDS-ACTION")).upper(),
-            "priority": int(todo.get("PRIORITY", 0)),
-            "percent_complete": int(todo.get("PERCENT-COMPLETE", 0)),
-            "categories": categories,
-            "links": links,
-            "due": _timestamp(todo, "DUE"),
-            "start": _timestamp(todo, "DTSTART"),
-            "created": _timestamp(todo, "CREATED") or _timestamp(todo, "DTSTAMP"),
-            "updated": _timestamp(todo, "LAST-MODIFIED") or _timestamp(todo, "DTSTAMP"),
-        })
+        tasks.append(
+            {
+                "uid": str(todo.get("UID", "")),
+                "summary": str(todo.get("SUMMARY", "")),
+                "description": description,
+                "status": str(todo.get("STATUS", "NEEDS-ACTION")).upper(),
+                "priority": int(todo.get("PRIORITY", 0)),
+                "percent_complete": int(todo.get("PERCENT-COMPLETE", 0)),
+                "categories": categories,
+                "links": links,
+                "due": _timestamp(todo, "DUE"),
+                "start": _timestamp(todo, "DTSTART"),
+                "created": _timestamp(todo, "CREATED") or _timestamp(todo, "DTSTAMP"),
+                "updated": _timestamp(todo, "LAST-MODIFIED")
+                or _timestamp(todo, "DTSTAMP"),
+            }
+        )
     return tasks
 
 
 def _timestamp(component, name):
     prop = component.get(name)
-    if prop is None: return None
+    if prop is None:
+        return None
     value = prop.dt
     if not isinstance(value, datetime.datetime):
         # An all-day date: due by the end of that day.
@@ -159,8 +169,10 @@ def _timestamp(component, name):
 
 
 def _verify(value):
-    if value.lower() in ("false", "no", "off", "0"): return False
-    if value.lower() in ("true", "yes", "on", "1"): return True
+    if value.lower() in ("false", "no", "off", "0"):
+        return False
+    if value.lower() in ("true", "yes", "on", "1"):
+        return True
     if Path(value).expanduser().exists():
         return str(Path(value).expanduser())  # A CA bundle or directory.
     raise ValueError(
@@ -177,11 +189,13 @@ class CalDAV:
         self._url = url if url.endswith("/") else url + "/"
         self._session = requests.Session()
         self._session.headers["User-Agent"] = "monoqueue"
-        if username: self._session.auth = (username, password)
+        if username:
+            self._session.auth = (username, password)
         self._session.verify = verify
         if verify is False:
             # Skipping verification was explicitly configured; don't nag.
             import urllib3
+
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def task_lists(self):
@@ -191,21 +205,30 @@ class CalDAV:
         :return:
             List of dicts with name and (absolute) url of each task list.
         """
-        principal = self._href(self._url, _PROPFIND_PRINCIPAL, "d:current-user-principal")
+        principal = self._href(
+            self._url, _PROPFIND_PRINCIPAL, "d:current-user-principal"
+        )
         home = self._href(principal, _PROPFIND_HOME, "c:calendar-home-set")
 
         lists = []
         for response in self._request("PROPFIND", home, _PROPFIND_CALENDARS, depth=1):
             prop = response.find("d:propstat/d:prop", _NS)
-            if prop is None or prop.find("d:resourcetype/c:calendar", _NS) is None: continue
+            if prop is None or prop.find("d:resourcetype/c:calendar", _NS) is None:
+                continue
             components = {
                 comp.get("name")
-                for comp in prop.findall("c:supported-calendar-component-set/c:comp", _NS)
+                for comp in prop.findall(
+                    "c:supported-calendar-component-set/c:comp", _NS
+                )
             }
             # NB: No component set means all components are supported.
-            if components and "VTODO" not in components: continue
+            if components and "VTODO" not in components:
+                continue
             href = urljoin(home, response.findtext("d:href", namespaces=_NS))
-            name = prop.findtext("d:displayname", namespaces=_NS) or href.rstrip("/").rsplit("/", 1)[-1]
+            name = (
+                prop.findtext("d:displayname", namespaces=_NS)
+                or href.rstrip("/").rsplit("/", 1)[-1]
+            )
             lists.append({"name": name, "url": href})
         return lists
 
@@ -218,21 +241,31 @@ class CalDAV:
         """
         results = []
         for response in self._request("REPORT", calendar_url, _REPORT_TODOS, depth=1):
-            data = response.findtext("d:propstat/d:prop/c:calendar-data", namespaces=_NS)
-            if data: results.append((response.findtext("d:href", namespaces=_NS), data))
+            data = response.findtext(
+                "d:propstat/d:prop/c:calendar-data", namespaces=_NS
+            )
+            if data:
+                results.append((response.findtext("d:href", namespaces=_NS), data))
         return results
 
     def _href(self, url, body, prop):
         for response in self._request("PROPFIND", url, body, depth=0):
             href = response.findtext(f"d:propstat/d:prop/{prop}/d:href", namespaces=_NS)
-            if href: return urljoin(url, href)
+            if href:
+                return urljoin(url, href)
         raise RuntimeError(f"No {prop} found at {url}")
 
     def _request(self, method, url, body, depth):
         log.debug("%s %s", method, url)
         response = self._session.request(
-            method, url, data=body.encode(), timeout=30,
-            headers={"Depth": str(depth), "Content-Type": "application/xml; charset=utf-8"},
+            method,
+            url,
+            data=body.encode(),
+            timeout=30,
+            headers={
+                "Depth": str(depth),
+                "Content-Type": "application/xml; charset=utf-8",
+            },
         )
         response.raise_for_status()
         return ET.fromstring(response.content).findall("d:response", _NS)

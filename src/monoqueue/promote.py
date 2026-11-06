@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -20,17 +19,19 @@ which may also override the [agent] settings for drafting:
     repo = me/tasks               # The fallback repository for new issues.
 """
 
+from __future__ import annotations
+
 import os
 import re
 import subprocess
 import tempfile
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from . import agent
 from .log import log
 
 
-def candidate_repos(mq, url: str, config: Dict[str, str] = None) -> List[str]:
+def candidate_repos(mq, url: str, config: dict[str, str] | None = None) -> list[str]:
     """
     Get the repositories where an issue promoted from the given action item
     might belong, most likely first: the item's own repository, those of
@@ -47,9 +48,11 @@ def candidate_repos(mq, url: str, config: Dict[str, str] = None) -> List[str]:
     repos = []
     for u in urls:
         repo = agent.github_repo(u)
-        if repo and repo not in repos: repos.append(repo)
+        if repo and repo not in repos:
+            repos.append(repo)
     fallback = config.get("repo")
-    if fallback and fallback not in repos: repos.append(fallback)
+    if fallback and fallback not in repos:
+        repos.append(fallback)
     return repos
 
 
@@ -63,7 +66,9 @@ def check_promotable(mq, url: str) -> None:
         raise ValueError("Already a GitHub issue")
 
 
-def draft(mq, url: str, why: str = "", config: Dict[str, str] = None) -> Dict[str, Any]:
+def draft(
+    mq, url: str, why: str = "", config: dict[str, str] | None = None
+) -> dict[str, Any]:
     """
     Draft an issue for the given action item, via an agent.
     """
@@ -73,14 +78,17 @@ def draft(mq, url: str, why: str = "", config: Dict[str, str] = None) -> Dict[st
         mq.mark_dirty(url)
     repos = candidate_repos(mq, url, config)
     if not repos:
-        raise ValueError("No repository for the issue: configure one via [promote] repo")
+        raise ValueError(
+            "No repository for the issue: configure one via [promote] repo"
+        )
     issue = agent.draft_issue(mq, url, repos, why, config)
     # NB: The body must link the original, whatever the agent wrote.
-    if url not in issue["body"]: issue["body"] += f"\n\nSee: {url}"
+    if url not in issue["body"]:
+        issue["body"] += f"\n\nSee: {url}"
     return issue
 
 
-def create(mq, url: str, issue: Dict[str, Any]) -> str:
+def create(mq, url: str, issue: dict[str, Any]) -> str:
     """
     Create the given (drafted) issue on GitHub, and link the action item
     into it.
@@ -90,21 +98,36 @@ def create(mq, url: str, issue: Dict[str, Any]) -> str:
     """
     log.info("Creating issue in %s: %s", issue["repo"], issue["title"])
     result = subprocess.run(
-        ["gh", "issue", "create", "--repo", issue["repo"],
-         "--title", issue["title"], "--body-file", "-"],
-        input=issue["body"], capture_output=True, text=True, check=False, timeout=60,
+        [
+            "gh",
+            "issue",
+            "create",
+            "--repo",
+            issue["repo"],
+            "--title",
+            issue["title"],
+            "--body-file",
+            "-",
+        ],
+        input=issue["body"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
     )
     if result.returncode != 0:
         raise RuntimeError(f"Cannot create issue: {result.stderr.strip()}")
     issue_url = mq.link(url, result.stdout.strip().splitlines()[-1])
     # Until the GitHub source fetches the issue, title the item after it.
     item = mq.item(issue_url)
-    if item is not None and "issue" not in item: item["title"] = issue["title"]
+    if item is not None and "issue" not in item:
+        item["title"] = issue["title"]
     return issue_url
 
 
-def interact(mq, url: str, why: str = "", repo: Optional[str] = None,
-             yes: bool = False) -> Optional[str]:
+def interact(
+    mq, url: str, why: str = "", repo: str | None = None, yes: bool = False
+) -> str | None:
     """
     Promote an action item on the terminal: draft an issue, show it, and
     let the user edit it, before creating it only if they confirm.
@@ -115,22 +138,30 @@ def interact(mq, url: str, why: str = "", repo: Optional[str] = None,
     url = mq.normalize(url)
     print(f"Drafting an issue for {url}...", flush=True)
     issue = draft(mq, url, why, mq.config.action("promote"))
-    if repo: issue["repo"] = repo
+    if repo:
+        issue["repo"] = repo
 
     while not yes:
         print()
         print(format_draft(issue))
-        answer = input(f"Create this issue in {issue['repo']}? [y]es, [e]dit, [N]o: ").strip().lower()
-        if answer == "e": issue = edit(issue)
-        elif answer == "y": break
-        else: return None
+        answer = (
+            input(f"Create this issue in {issue['repo']}? [y]es, [e]dit, [N]o: ")
+            .strip()
+            .lower()
+        )
+        if answer == "e":
+            issue = edit(issue)
+        elif answer == "y":
+            break
+        else:
+            return None
 
     issue_url = create(mq, url, issue)
     print(f"Created {issue_url}")
     return issue_url
 
 
-def edit(issue: Dict[str, Any]) -> Dict[str, Any]:
+def edit(issue: dict[str, Any]) -> dict[str, Any]:
     """
     Edit a drafted issue in the user's editor.
     """
@@ -143,7 +174,7 @@ def edit(issue: Dict[str, Any]) -> Dict[str, Any]:
         return parse_draft(f.read())
 
 
-def format_draft(issue: Dict[str, Any]) -> str:
+def format_draft(issue: dict[str, Any]) -> str:
     """
     Format a drafted issue as editable text: repo and title lines, then
     a blank line, then the body.
@@ -151,7 +182,7 @@ def format_draft(issue: Dict[str, Any]) -> str:
     return f"repo: {issue['repo']}\ntitle: {issue['title']}\n\n{issue['body']}\n"
 
 
-def parse_draft(text: str) -> Dict[str, Any]:
+def parse_draft(text: str) -> dict[str, Any]:
     """
     Parse text in the format of format_draft, e.g. after editing it.
     """
@@ -159,7 +190,8 @@ def parse_draft(text: str) -> Dict[str, Any]:
     issue = {"body": body.strip()}
     for line in header.splitlines():
         key, _, value = line.partition(":")
-        if key.strip() in ("repo", "title"): issue[key.strip()] = value.strip()
+        if key.strip() in ("repo", "title"):
+            issue[key.strip()] = value.strip()
     if not issue.get("repo") or not issue.get("title"):
         raise ValueError("The draft needs repo: and title: lines")
     return issue

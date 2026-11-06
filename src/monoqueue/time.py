@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -11,9 +10,10 @@
 Utility functions for working with dates and times.
 """
 
+from __future__ import annotations
+
 import datetime
 import re
-from typing import Union
 
 
 def now() -> datetime.datetime:
@@ -42,7 +42,9 @@ def str2dt(timestamp: str) -> datetime.datetime:
     if re.match("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$", timestamp):
         # Discourse style, with millisecond.
         return datetime.datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")
-    m = re.match("(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2}(:\\d{2})?)( UTC)?$", timestamp)
+    m = re.match(
+        "(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2}(:\\d{2})?)( UTC)?$", timestamp
+    )
     if m:
         # Naive or explicitly UTC, e.g. "2026-09-17 09:44 UTC"; assume UTC.
         hms = m.group(2) if m.group(3) else m.group(2) + ":00"
@@ -66,7 +68,7 @@ def utc(timestamp: datetime.datetime) -> datetime.datetime:
     return timestamp.astimezone(datetime.timezone.utc)
 
 
-def string(timestamp: Union[datetime.datetime, int]) -> str:
+def string(timestamp: datetime.datetime | int) -> str:
     """
     Converts a timestamp to an ISO-8601-formatted UTC timestamp string.
     :param timestamp:
@@ -78,11 +80,11 @@ def string(timestamp: Union[datetime.datetime, int]) -> str:
     if isinstance(timestamp, (int, float)):
         timestamp = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
     if not isinstance(timestamp, datetime.datetime):
-        raise ValueError(f"Invalid timestamp type: {type(timestamp)}")
+        raise TypeError(f"Invalid timestamp type: {type(timestamp)}")
     return utc(timestamp).replace(tzinfo=None).isoformat() + "Z"
 
 
-def age(timestamp: Union[datetime.datetime, str]) -> datetime.timedelta:
+def age(timestamp: datetime.datetime | str) -> datetime.timedelta:
     """
     Gets the amount of time that has passed since the given timestamp.
     :param timestamp:

@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -34,19 +33,24 @@ def update(mq, config):
     orgs, users = _parse_owners(config["query"])
     progress = None
     if mq.progress:
+
         def progress(fetched, total):
             mq.progress(True)
+
     token = config.get("token") or gh_token()
     items = fetch_items(orgs=orgs, users=users, token=token, progress=progress)
     if mq.progress:
         mq.progress(None)
     for issue in items:
-        mq.put(issue["html_url"], {
-            "title": issue["title"],
-            "created": issue["created_at"],
-            "updated": issue["updated_at"],
-            "issue": issue,
-        })
+        mq.put(
+            issue["html_url"],
+            {
+                "title": issue["title"],
+                "created": issue["created_at"],
+                "updated": issue["updated_at"],
+                "issue": issue,
+            },
+        )
 
 
 def gh_token():
@@ -54,8 +58,11 @@ def gh_token():
     Get the GitHub token of the gh command line tool, if it is logged in.
     This avoids needing a separate token in the monoqueue configuration.
     """
-    if not shutil.which("gh"): return None
-    result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, check=False)
+    if not shutil.which("gh"):
+        return None
+    result = subprocess.run(
+        ["gh", "auth", "token"], capture_output=True, text=True, check=False
+    )
     token = result.stdout.strip()
     return token if result.returncode == 0 and token else None
 
@@ -180,7 +187,10 @@ def _write_cache(cache_dir, orgs, users, all_items, fetched_at):
         for repo in repos:
             (d / f"{repo}.json").write_text(
                 json.dumps(
-                    {"fetched_at": fetched_at, "items": repo_items.get((owner, repo), {})},
+                    {
+                        "fetched_at": fetched_at,
+                        "items": repo_items.get((owner, repo), {}),
+                    },
                     indent=2,
                 )
             )
@@ -188,7 +198,6 @@ def _write_cache(cache_dir, orgs, users, all_items, fetched_at):
 
 
 class GitHubIssues:
-
     def __init__(self, items=None, token=None, progress=None):
         self._token = token
         self.issues = [] if items is None else items
@@ -228,7 +237,9 @@ class GitHubIssues:
         next_url = resp.links.get("next", {}).get("url")
         if not next_url and total > 1000 and data["items"]:
             # Work around GitHub's 1000-result search cap.
-            next_url = self._search_url(f"{query}+created:>{data['items'][-1]['created_at']}")
+            next_url = self._search_url(
+                f"{query}+created:>{data['items'][-1]['created_at']}"
+            )
         return next_url, total
 
     @staticmethod

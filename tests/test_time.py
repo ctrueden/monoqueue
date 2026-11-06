@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # This is free and unencumbered software released into the public domain.
 # See the UNLICENSE file for details.
@@ -16,7 +15,6 @@ UTC = datetime.timezone.utc
 
 
 class TestTime(unittest.TestCase):
-
     def test_str2dt_formats(self):
         expected = datetime.datetime(2026, 9, 17, 9, 44, tzinfo=UTC)
         self.assertEqual(expected, time.str2dt("2026-09-17T09:44:00Z"))
@@ -42,5 +40,5 @@ class TestTime(unittest.TestCase):
         self.assertEqual(s, time.string(time.str2dt(s)))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
