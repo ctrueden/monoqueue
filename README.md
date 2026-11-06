@@ -13,6 +13,7 @@ This project unifies your support queue across various sources, such as:
 * GitHub issues and PRs
 * Topics from online forums
 * Tickets from helpdesk software
+* Email threads
 * Any action that can be represented by a URL
 
 Monoqueue's target audience is people managing large numbers of action items:
@@ -252,6 +253,80 @@ and `task/links` (URLs from the task's URL field and description):
 due-soon      = seconds_until_due < 86400 -> +50: due within a day
 high-priority = task/priority == 1        -> +20: high priority task
 ```
+
+#### Email (IMAP)
+
+The imap handler makes an action item of each email thread in the
+configured mailboxes of an IMAP server, such as Dovecot or Fastmail:
+
+```ini
+[mail]
+handler = imap
+host = mail.example.org
+username = <your-username>
+password = <your-password>
+mailboxes = INBOX
+search = FLAGGED
+link = https://mail.example.org/?_task=mail&_action=show&_mbox={mailbox}&_uid={uid}
+```
+
+Options:
+- `mailboxes`: names of mailboxes to read, comma-separated (default `INBOX`).
+- `search`: an [IMAP search](https://www.rfc-editor.org/rfc/rfc9051#name-search-command)
+  selecting the messages to read (default `ALL`), e.g. `FLAGGED`,
+  or `KEYWORD $label1`.
+- `link`: a URL template for opening messages in a web app, with
+  `{mailbox}`, `{uid}` and `{message_id}` placeholders; the example is
+  for Roundcube.
+- `ssl`: `true` (the default; port 993), `starttls`, or `false` (port 143).
+  `port` overrides the port.
+- `verify`: as for [CalDAV tasks](#caldav-tasks).
+- `command`: instead of connecting and logging in, run this command, which
+  speaks IMAP on its standard input and output, already logged in. For a
+  Dovecot server on the same computer, that needs no password:
+  `command = doveadm exec imap`.
+
+Messages are grouped into threads by their `References` and `In-Reply-To`
+headers, or failing that their subjects, among the messages read: so a
+thread is one item, however many of its messages match. It is opened
+at its latest message, and keyed by its first message's Message-ID, as a
+`mid:` URL, so it stays the same item as its messages move between
+folders. Mail about a GitHub issue or pull request, or a Discourse topic
+(such as a notification), becomes part of that item instead.
+
+Rules can use `email/label`, the most urgent of the thread's `$label1` to
+`$label9` keywords (1 being the most urgent), as set by Thunderbird or
+Roundcube's thunderbird_labels plugin; and `email/keywords`,
+`email/unread`, `email/flagged`, `email/mailboxes`, `email/from` (the
+first message's sender), `email/senders` (all senders' addresses), and
+`email/count`. Only the first 64 KiB of each message is read: enough for
+the text of the latest message, which is the item's description.
+
+With Dovecot, [virtual mailboxes](https://doc.dovecot.org/main/core/plugins/virtual.html)
+can gather messages from all folders, e.g. one per label, whose real
+folders are then used for links. So to queue all mail with any of the
+five labels, sorted by label:
+
+```ini
+[mail]
+handler = imap
+command = doveadm exec imap
+mailboxes = Virtual/1-Urgent, Virtual/2-Soon, Virtual/3-To Do, Virtual/4-Later, Virtual/5-Someday
+```
+
+```ini
+[email]
+urgent  = email/label == 1 -> +50: urgent email
+soon    = email/label == 2 -> +25: email to answer soon
+todo    = email/label == 3 -> +12: email to do
+later   = email/label == 4 -> +3: email for later
+
+[multipliers]
+someday = email/label == 5 -> /5: email for someday
+```
+
+Put the `[mail]` section after `[github]` and `[notifications]`, so that
+items they share get their titles from GitHub.
 
 #### GitHub notifications
 

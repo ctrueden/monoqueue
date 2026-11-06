@@ -82,7 +82,7 @@ class UI:
         sys.stdout.write(
             "\0337"  # Save cursor position and attributes.
             f"\033[{y + 1};{x + 1}H\033[36;40m"
-            f"\033]8;;{self.url}\033\\{text}\033]8;;\033\\"
+            f"\033]8;;{self.mq.open_url(self.url)}\033\\{text}\033]8;;\033\\"
             "\0338"  # Restore them.
         )
         sys.stdout.flush()
@@ -268,10 +268,11 @@ class UI:
         e.g. when connected via ssh, copy the URL to the clipboard of the
         terminal you are using (OSC 52), rather than open a console browser.
         """
+        url = self.mq.open_url(self.url)
         if _has_display():
-            webbrowser.open(self.url)
+            webbrowser.open(url)
             return
-        data = base64.b64encode(self.url.encode()).decode()
+        data = base64.b64encode(url.encode()).decode()
         sys.stdout.write(f"\033]52;c;{data}\a")
         sys.stdout.flush()
         self.message = "Copied URL to clipboard"

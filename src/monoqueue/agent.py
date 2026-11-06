@@ -105,6 +105,7 @@ def describe(mq, url: str, max_body: int = 4000) -> str:
     """
     item = mq.item(url) or {}
     lines = [f"URL: {url}", f"Title: {(item.get('title') or '').strip()}"]
+    if item.get("link"): lines.append(f"Link: {item['link']}")
     if item.get("sources"): lines.append(f"Sources: {', '.join(item['sources'])}")
     for key in ("created", "updated", "due"):
         if item.get(key): lines.append(f"{key.capitalize()}: {item[key]}")
@@ -137,6 +138,12 @@ def describe(mq, url: str, max_body: int = 4000) -> str:
         task = item["task"]
         lines.append(f"A task in my task list {task.get('list')!r}, priority {task.get('priority')}")
         if task.get("links"): lines.append(f"Task links: {', '.join(task['links'])}")
+    mail = item.get("email")
+    if mail:
+        lines.append(f"Email thread of {mail.get('count')} messages, from {mail.get('from')}, "
+                     f"in {', '.join(mail.get('mailboxes') or [])}"
+                     + (f"; label {mail['label']}" if mail.get("label") else "")
+                     + ("; unread" if mail.get("unread") else ""))
     if item.get("bookmark"):
         lines.append("Bookmarked in my browser's action folder")
 

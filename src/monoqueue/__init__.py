@@ -19,7 +19,7 @@ import re
 from typing import Any, Dict, Optional, List
 from urllib.parse import urlsplit
 
-from . import caldav, discourse, firefox, github, notifications, scijava
+from . import caldav, discourse, firefox, github, imap, notifications, scijava
 from .config import Config, read_config  # noqa: F401
 from . import time, urls
 from .lock import lock, write_json
@@ -32,6 +32,7 @@ HANDLERS = {
     "bookmarks": firefox.update,
     "firefox": firefox.update,  # The old name of bookmarks.
     "github": github.update,
+    "imap": imap.update,
     "notifications": notifications.update,
     "scijava": scijava.update,  # The old name of scijava-team.
     "scijava-team": scijava.update,
@@ -392,6 +393,14 @@ class Monoqueue:
             Information relating to the action item, or None if no such item.
         """
         return self.items.get(url)
+
+    def open_url(self, url: str) -> str:
+        """
+        Get the URL that opens the given action item, e.g. in a browser:
+        its link, for items whose URL no browser opens (such as an email's
+        mid: URL), or else the URL itself.
+        """
+        return (self.items.get(url) or {}).get("link") or url
 
     def metadata(self, url: str) -> Dict[str, Any]:
         """
